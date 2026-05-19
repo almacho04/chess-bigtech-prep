@@ -38,7 +38,7 @@ export const DIFFICULTIES: readonly Difficulty[] = [
     label: "Master",
     description: "Full strength",
     skillLevel: 20,
-    depth: 9,
+    depth: 8,
   },
 ] as const;
 
