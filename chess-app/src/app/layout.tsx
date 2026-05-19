@@ -34,7 +34,14 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body
+        // Suppress hydration mismatch from browser extensions (Grammarly,
+        // LastPass, etc.) that inject data-* attributes onto <body>.
+        suppressHydrationWarning
+        className="min-h-full flex flex-col"
+      >
+        {children}
+      </body>
     </html>
   );
 }
