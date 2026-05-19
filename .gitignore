@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# logs
+*.log
+npm-debug.log*
+
+# editor
+.vscode/
+.idea/
+
+# env files (chess-app/.gitignore also handles these, but defense in depth)
+.env
+.env.local
+.env*.local
