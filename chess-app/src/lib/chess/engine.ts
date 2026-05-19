@@ -14,6 +14,8 @@ export type UciMove = {
 };
 
 const WORKER_URL = "/engines/stockfish.wasm.js";
+const DEBUG =
+  typeof process !== "undefined" && process.env.NODE_ENV !== "production";
 
 export class StockfishEngine {
   private worker: Worker | null = null;
@@ -35,6 +37,9 @@ export class StockfishEngine {
       }
       this.worker.onmessage = (e) => {
         const line = String(e.data);
+        if (DEBUG) {
+          console.debug("[stockfish ←]", line);
+        }
         for (const l of this.listeners) l(line);
       };
       this.worker.onerror = (err) => reject(err);
@@ -53,27 +58,51 @@ export class StockfishEngine {
   /** Should be called once per game before requesting moves. */
   async newGame(skillLevel: number): Promise<void> {
     await this.init();
-    // Bigger transposition table → faster repeat-position lookups; default 16MB
-    // is too small for serious search. 64MB is plenty for an in-browser engine.
+    // Cancel any in-flight search before resetting engine state.
+    this.send("stop");
     this.send("setoption name Hash value 64");
     this.send(`setoption name Skill Level value ${skillLevel}`);
     this.send("ucinewgame");
     this.send("isready");
-    await this.waitForLine((l) => l === "readyok");
+    await this.waitForLine((l) => l === "readyok", { timeoutMs: 5000 });
   }
 
   /**
-   * Ask for the best move from the given FEN. Capped by both time and depth —
-   * Stockfish returns as soon as either limit is reached, so response time
-   * stays predictable instead of varying wildly with position complexity.
+   * Ask for the best move from the given FEN. Capped strictly by `movetime`
+   * (Stockfish.js v10's combined depth+time options aren't reliable — using
+   * time alone keeps response latency predictable across difficulties).
+   *
+   * Returns `null` if the engine doesn't respond within a generous timeout —
+   * lets the caller surface an error instead of hanging the UI.
    */
   async bestMove(fen: string, difficulty: Difficulty): Promise<UciMove | null> {
     await this.init();
+    // Apply skill level on every move so mid-game difficulty changes take effect.
+    this.send(`setoption name Skill Level value ${difficulty.skillLevel}`);
+    // Cancel any leftover search before starting a new one.
+    this.send("stop");
     this.send(`position fen ${fen}`);
-    this.send(
-      `go movetime ${difficulty.movetimeMs} depth ${difficulty.maxDepth}`,
+    this.send(`go movetime ${difficulty.movetimeMs}`);
+    // Give the engine 3× the time budget plus a generous grace period before
+    // giving up. On healthy hardware it should return well before this.
+    const timeoutMs = difficulty.movetimeMs * 3 + 5000;
+    const line = await this.waitForLine(
+      (l) => l.startsWith("bestmove"),
+      { timeoutMs },
     );
-    const line = await this.waitForLine((l) => l.startsWith("bestmove"));
+    if (!line) {
+      // Timed out — tell the engine to stop in case it's still spinning.
+      this.send("stop");
+      if (DEBUG) {
+        console.error(
+          "[stockfish] bestmove timed out after",
+          timeoutMs,
+          "ms for fen",
+          fen,
+        );
+      }
+      return null;
+    }
     return parseBestMove(line);
   }
 
@@ -81,6 +110,7 @@ export class StockfishEngine {
   dispose(): void {
     if (this.worker) {
       try {
+        this.send("stop");
         this.send("quit");
       } catch {
         // ignore
@@ -93,18 +123,31 @@ export class StockfishEngine {
   }
 
   private send(cmd: string): void {
+    if (DEBUG) {
+      console.debug("[stockfish →]", cmd);
+    }
     this.worker?.postMessage(cmd);
   }
 
-  private waitForLine(predicate: (line: string) => boolean): Promise<string> {
+  private waitForLine(
+    predicate: (line: string) => boolean,
+    opts: { timeoutMs?: number } = {},
+  ): Promise<string | null> {
     return new Promise((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
       const listener = (line: string) => {
-        if (predicate(line)) {
-          this.listeners.delete(listener);
-          resolve(line);
-        }
+        if (!predicate(line)) return;
+        this.listeners.delete(listener);
+        if (timer) clearTimeout(timer);
+        resolve(line);
       };
       this.listeners.add(listener);
+      if (opts.timeoutMs) {
+        timer = setTimeout(() => {
+          this.listeners.delete(listener);
+          resolve(null);
+        }, opts.timeoutMs);
+      }
     });
   }
 }

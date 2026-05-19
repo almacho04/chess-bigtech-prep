@@ -220,9 +220,13 @@ export function AiGameShell() {
     const diff = getDifficulty(difficultyId);
 
     (async () => {
+      let nextState: "ready" | "error" = "ready";
       try {
         const engine = engineRef.current;
-        if (!engine) return;
+        if (!engine) {
+          nextState = "error";
+          return;
+        }
         const uci = await engine.bestMove(fenSnapshot, diff);
         if (cancelled || !aliveRef.current) return;
         // Sanity: position must not have moved on while we waited
@@ -230,9 +234,15 @@ export function AiGameShell() {
         if (uci) {
           tryMove(chessRef.current, uci.from, uci.to, uci.promotion);
           syncFromChess();
+        } else {
+          // null uci = engine timed out or returned no move. Transition to
+          // error so the trigger effect won't immediately loop and try again.
+          nextState = "error";
         }
+      } catch {
+        nextState = "error";
       } finally {
-        if (aliveRef.current && !cancelled) setEngineState("ready");
+        if (aliveRef.current && !cancelled) setEngineState(nextState);
       }
     })();
 
