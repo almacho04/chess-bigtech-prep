@@ -68,9 +68,9 @@ export class StockfishEngine {
   }
 
   /**
-   * Ask for the best move from the given FEN. Capped strictly by `movetime`
-   * (Stockfish.js v10's combined depth+time options aren't reliable — using
-   * time alone keeps response latency predictable across difficulties).
+   * Ask for the best move from the given FEN. Capped by `depth` —
+   * Stockfish.js v10's `movetime` is unreliable in this build, but `depth`
+   * works correctly. Skill Level handles strength variance per difficulty.
    *
    * Returns `null` if the engine doesn't respond within a generous timeout —
    * lets the caller surface an error instead of hanging the UI.
@@ -82,16 +82,15 @@ export class StockfishEngine {
     // Cancel any leftover search before starting a new one.
     this.send("stop");
     this.send(`position fen ${fen}`);
-    this.send(`go movetime ${difficulty.movetimeMs}`);
-    // Give the engine 3× the time budget plus a generous grace period before
-    // giving up. On healthy hardware it should return well before this.
-    const timeoutMs = difficulty.movetimeMs * 3 + 5000;
+    this.send(`go depth ${difficulty.depth}`);
+    // Generous safety net — depth N typically completes in seconds, but if the
+    // worker crashes or the WASM hangs, we don't want to wedge the UI forever.
+    const timeoutMs = 30_000;
     const line = await this.waitForLine(
       (l) => l.startsWith("bestmove"),
       { timeoutMs },
     );
     if (!line) {
-      // Timed out — tell the engine to stop in case it's still spinning.
       this.send("stop");
       if (DEBUG) {
         console.error(

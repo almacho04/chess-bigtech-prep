@@ -4,8 +4,11 @@ export type Difficulty = {
   description: string;
   /** UCI Skill Level option (0–20). Controls how strong Stockfish plays. */
   skillLevel: number;
-  /** Time budget per move in milliseconds. Caps the engine's "thinking" time. */
-  movetimeMs: number;
+  /**
+   * Max search depth. Stockfish.js v10 reliably honours `go depth N`;
+   * `go movetime` is unreliable in this build, so depth is the cap we use.
+   */
+  depth: number;
 };
 
 export const DIFFICULTIES: readonly Difficulty[] = [
@@ -14,28 +17,28 @@ export const DIFFICULTIES: readonly Difficulty[] = [
     label: "Easy",
     description: "Beginner — blunders often",
     skillLevel: 0,
-    movetimeMs: 300,
+    depth: 4,
   },
   {
     id: "medium",
     label: "Medium",
     description: "Club player",
     skillLevel: 8,
-    movetimeMs: 700,
+    depth: 7,
   },
   {
     id: "hard",
     label: "Hard",
     description: "Strong",
     skillLevel: 15,
-    movetimeMs: 1500,
+    depth: 10,
   },
   {
     id: "master",
     label: "Master",
     description: "Full strength",
     skillLevel: 20,
-    movetimeMs: 2500,
+    depth: 13,
   },
 ] as const;
 
