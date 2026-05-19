@@ -26,6 +26,7 @@
 
 *Most recent first. Append a new dated bullet whenever work meaningfully advances or pivots. 1–3 lines per entry.*
 
+- `2026-05-19` — **Tier 4a shipped — `/training` mode, the niche differentiator.** Curated mate-in-1 puzzles ([`src/lib/training/puzzles.ts`](chess-app/src/lib/training/puzzles.ts)) framed as interview-style calculation drills. Deterministic daily puzzle rotation. PuzzleSolver client component validates by checking `isCheckmate()` after the user's move — accepts any move that mates. Wrong moves animate briefly then snap back. Landing page CTAs reordered so "Start training" is the primary action. **Next:** README, then multiplayer if time.
 - `2026-05-19` — **Tier 3 fully live in production.** User completed: SQL migration in Supabase, Site/Redirect URLs configured, env vars added in Vercel + redeploy. Production smoke test confirms: `/`, `/play/ai`, `/play/local` → 200; `/history` → 307 redirect for unauthed users; `/auth/callback` rejects bad codes. **Next:** Tier 4 (Great) — `/training` mode (the niche differentiator) + AI Coach + multiplayer + README polish.
 - `2026-05-19` — **Tier 3d code shipped — Supabase auth + games persistence + history.** Server/browser/middleware Supabase clients via `@supabase/ssr`. Magic-link sign-in via `AuthButton` in the header. Completed games (AI + local) auto-save with PGN + result + move count when the user is signed in. `/history` lists their games (RLS-scoped), `/history/[gameId]` is a full replay viewer with keyboard nav and click-to-jump on the move list. **Manual steps still required from user:** (a) paste the SQL at `chess-app/supabase/schema.sql` into the Supabase SQL Editor and run it, (b) add the two `NEXT_PUBLIC_SUPABASE_*` env vars to Vercel for Production / Preview / Development, (c) in Supabase dashboard set Site URL = production Vercel URL and add localhost + Vercel URLs to Redirect URLs.
 - `2026-05-19` — **Tier 3b + 3c shipped.** Theme toggle (system / light / dark) with a no-FOUC boot script in `<head>`; Tailwind `dark:` variant switched from `prefers-color-scheme` to a `data-theme` attribute. Promotion piece picker modal in both shells (Q/R/B/N + keyboard shortcuts + Escape to cancel); AI promotion moves still apply automatically from UCI. **Next:** Tier 3d — Supabase auth + games table + history (needs user to create a Supabase project).
@@ -93,11 +94,11 @@
 - [ ] Profile page (display name, ELO, city) — *deferred to Tier 4*
 
 ### Tier 4 — Great  *(the "wow")*
-- [ ] **Multiplayer** via shareable link (Supabase Realtime channel keyed by game ID)
-- [ ] **Post-game AI Coach:** Stockfish flags moves with eval drop > N centipawns → Claude API generates plain-language coaching for each
-- [ ] **BigTech interview prep angle:** `/training` mode with curated puzzle packs themed around interview-style tactics; daily puzzle streak
-- [ ] City-based leaderboard (user profile stores city; weekly board by city + ELO)
-- [ ] **Stripe Checkout → Pro tier:** unlimited AI Coach analyses, custom piece skins, advanced training packs
+- [x] **BigTech interview prep angle:** `/training` mode with curated mate-in-1 puzzle pack and daily rotation
+- [ ] **Multiplayer** via shareable link (Supabase Realtime channel keyed by game ID) — *if time*
+- [ ] **Post-game AI Coach:** Stockfish flags blunders → Claude API plain-language coaching — *deferred, no Anthropic key*
+- [ ] City-based leaderboard — *deferred*
+- [ ] Stripe Pro tier — *deferred*
 - [ ] README with screenshots/GIFs, niche pitch, monetization story
 
 ---

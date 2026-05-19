@@ -20,8 +20,14 @@ export default function Landing() {
         </p>
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
           <Link
-            href="/play/ai"
+            href="/training"
             className="rounded-md bg-foreground px-6 py-3 text-center text-base font-medium text-background transition hover:opacity-90"
+          >
+            Start training →
+          </Link>
+          <Link
+            href="/play/ai"
+            className="rounded-md border border-foreground/20 px-6 py-3 text-center text-base font-medium transition hover:bg-foreground/5"
           >
             Play vs AI
           </Link>
@@ -29,21 +35,21 @@ export default function Landing() {
             href="/play/local"
             className="rounded-md border border-foreground/20 px-6 py-3 text-center text-base font-medium transition hover:bg-foreground/5"
           >
-            Play locally
+            Local 2-player
           </Link>
         </div>
         <div className="mt-8 grid w-full max-w-3xl gap-4 text-left sm:grid-cols-3">
           <Feature
-            title="Full rules"
-            body="Castling, en passant, mate / stalemate / draw — powered by chess.js."
+            title="Daily training"
+            body="Mate-in-1 puzzles + tactical patterns framed for interview-style calculation."
           />
           <Feature
             title="Stockfish AI"
             body="Four difficulties from blundering beginner to full strength."
           />
           <Feature
-            title="Resume anytime"
-            body="Your game persists in the browser — close and come back."
+            title="Persistent history"
+            body="Sign in, save every game, replay your moves move-by-move."
           />
         </div>
       </section>
