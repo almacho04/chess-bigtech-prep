@@ -91,6 +91,16 @@ export function legalTargetsFrom(chess: Chess, square: string): string[] {
   }
 }
 
+export type ChessResult = "1-0" | "0-1" | "1/2-1/2" | "*";
+
+export function resultFromStatus(status: GameStatus): ChessResult {
+  if (status.kind === "checkmate") {
+    return status.winner === "white" ? "1-0" : "0-1";
+  }
+  if (status.kind === "stalemate" || status.kind === "draw") return "1/2-1/2";
+  return "*";
+}
+
 export function isPromotionMove(
   chess: Chess,
   from: string,

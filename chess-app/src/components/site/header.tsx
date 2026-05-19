@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuthButton } from "./auth-button";
 import { ThemeToggle } from "./theme-toggle";
 
 export function SiteHeader({
@@ -15,15 +16,14 @@ export function SiteHeader({
         >
           chess<span className="text-foreground/40">·prep</span>
         </Link>
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-foreground/60 sm:text-sm">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="hidden text-xs text-foreground/60 sm:block sm:text-sm">
             {rightContent ?? (
-              <span className="hidden sm:inline">
-                Chess for BigTech interview prep
-              </span>
+              <span>Chess for BigTech interview prep</span>
             )}
           </div>
           <ThemeToggle />
+          <AuthButton />
         </div>
       </div>
     </header>

@@ -8,9 +8,12 @@ import {
   historyToRecords,
   isPromotionMove,
   legalTargetsFrom,
+  resultFromStatus,
   tryMove,
   type MoveRecord,
 } from "@/lib/chess/game";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { saveGame } from "@/lib/supabase/games";
 import {
   DEFAULT_DIFFICULTY,
   DIFFICULTIES,
@@ -97,6 +100,8 @@ export function AiGameShell() {
   >("loading");
   const [pendingPromotion, setPendingPromotion] =
     useState<PendingPromotion | null>(null);
+  const [savedGameId, setSavedGameId] = useState<string | null>(null);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   const difficulty = useMemo(
     () => getDifficulty(difficultyId),
@@ -157,6 +162,45 @@ export function AiGameShell() {
       difficultyId,
     });
   }, [fen, humanColor, difficultyId, mounted]);
+
+  // Auto-save completed AI games to Supabase if the user is signed in.
+  // Runs once per game (gated by savedGameId).
+  useEffect(() => {
+    if (!mounted) return;
+    if (status.kind === "ongoing") return;
+    if (savedGameId) return;
+    if (moves.length === 0) return; // skip empty new games
+
+    let cancelled = false;
+    const pgnSnapshot = chessRef.current.pgn();
+    const moveCount = moves.length;
+    const result = resultFromStatus(status);
+
+    (async () => {
+      const row = await saveGame(supabase, {
+        mode: "ai",
+        pgn: pgnSnapshot,
+        result,
+        move_count: moveCount,
+        opponent_difficulty: difficultyId,
+        human_color: humanColor,
+      });
+      if (cancelled || !aliveRef.current) return;
+      if (row) setSavedGameId(row.id);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    status,
+    savedGameId,
+    moves.length,
+    mounted,
+    supabase,
+    difficultyId,
+    humanColor,
+  ]);
 
   // Trigger engine reply when it's AI's turn and engine is idle
   useEffect(() => {
@@ -301,6 +345,7 @@ export function AiGameShell() {
       setHumanColor(color);
       setDifficultyId(diffId);
       setSelectedSquare(null);
+      setSavedGameId(null);
       clearAiGame();
       syncFromChess();
       // Tell the engine it's a new game and update skill level

@@ -8,9 +8,12 @@ import {
   historyToRecords,
   isPromotionMove,
   legalTargetsFrom,
+  resultFromStatus,
   tryMove,
   type MoveRecord,
 } from "@/lib/chess/game";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { saveGame as saveGameToSupabase } from "@/lib/supabase/games";
 import {
   clearGame,
   loadGame,
@@ -38,6 +41,15 @@ export function GameShell() {
   const [mounted, setMounted] = useState(false);
   const [pendingPromotion, setPendingPromotion] =
     useState<PendingPromotion | null>(null);
+  const [savedGameId, setSavedGameId] = useState<string | null>(null);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   // Hydrate from localStorage on mount
   useEffect(() => {
@@ -61,6 +73,36 @@ export function GameShell() {
       orientation,
     });
   }, [fen, redoStack, orientation, mounted]);
+
+  // Auto-save completed games to Supabase if the user is signed in.
+  // Runs once per game (gated by savedGameId).
+  useEffect(() => {
+    if (!mounted) return;
+    const currentStatus = describeStatus(new Chess(fen));
+    if (currentStatus.kind === "ongoing") return;
+    if (savedGameId) return;
+    if (moves.length === 0) return;
+
+    let cancelled = false;
+    const pgnSnapshot = chessRef.current.pgn();
+    const moveCount = moves.length;
+    const result = resultFromStatus(currentStatus);
+
+    (async () => {
+      const row = await saveGameToSupabase(supabase, {
+        mode: "local",
+        pgn: pgnSnapshot,
+        result,
+        move_count: moveCount,
+      });
+      if (cancelled || !aliveRef.current) return;
+      if (row) setSavedGameId(row.id);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fen, savedGameId, moves.length, mounted, supabase]);
 
   const syncFromChess = useCallback(() => {
     setFen(chessRef.current.fen());
@@ -173,6 +215,7 @@ export function GameShell() {
     chessRef.current = new Chess();
     setRedoStack([]);
     setSelectedSquare(null);
+    setSavedGameId(null);
     clearGame();
     syncFromChess();
   }, [moves.length, syncFromChess]);
