@@ -26,6 +26,7 @@
 
 *Most recent first. Append a new dated bullet whenever work meaningfully advances or pivots. 1–3 lines per entry.*
 
+- `2026-05-19` — **Tier 3 fully live in production.** User completed: SQL migration in Supabase, Site/Redirect URLs configured, env vars added in Vercel + redeploy. Production smoke test confirms: `/`, `/play/ai`, `/play/local` → 200; `/history` → 307 redirect for unauthed users; `/auth/callback` rejects bad codes. **Next:** Tier 4 (Great) — `/training` mode (the niche differentiator) + AI Coach + multiplayer + README polish.
 - `2026-05-19` — **Tier 3d code shipped — Supabase auth + games persistence + history.** Server/browser/middleware Supabase clients via `@supabase/ssr`. Magic-link sign-in via `AuthButton` in the header. Completed games (AI + local) auto-save with PGN + result + move count when the user is signed in. `/history` lists their games (RLS-scoped), `/history/[gameId]` is a full replay viewer with keyboard nav and click-to-jump on the move list. **Manual steps still required from user:** (a) paste the SQL at `chess-app/supabase/schema.sql` into the Supabase SQL Editor and run it, (b) add the two `NEXT_PUBLIC_SUPABASE_*` env vars to Vercel for Production / Preview / Development, (c) in Supabase dashboard set Site URL = production Vercel URL and add localhost + Vercel URLs to Redirect URLs.
 - `2026-05-19` — **Tier 3b + 3c shipped.** Theme toggle (system / light / dark) with a no-FOUC boot script in `<head>`; Tailwind `dark:` variant switched from `prefers-color-scheme` to a `data-theme` attribute. Promotion piece picker modal in both shells (Q/R/B/N + keyboard shortcuts + Escape to cancel); AI promotion moves still apply automatically from UCI. **Next:** Tier 3d — Supabase auth + games table + history (needs user to create a Supabase project).
 - `2026-05-19` — **Tier 3a shipped — Stockfish AI opponent + landing page.** Stockfish 10 (WASM, ~640 KB) vendored at [`chess-app/public/engines/`](chess-app/public/engines/); browser loads it via Web Worker. Engine wrapper [`src/lib/chess/engine.ts`](chess-app/src/lib/chess/engine.ts) speaks UCI with a promise API. 4 difficulties (Skill Level 0/8/15/20 × depth 5/10/14/18). New routes: `/` is a landing page with niche pitch, `/play/local` is the existing 2-player, `/play/ai` plays vs Stockfish with side selection, live difficulty changes, and 2-ply undo. Shared site header at [`src/components/site/header.tsx`](chess-app/src/components/site/header.tsx). Persists at `chess.ai-game.v1`. `npm run build` + `npm run lint` clean. **Next:** dark/light toggle, then promotion picker.
@@ -79,7 +80,7 @@
 - [x] Click-to-move with legal-target highlighting (in addition to drag-and-drop)
 - [x] Board flip control
 
-### Tier 3 — Strong  (code shipped; needs manual Supabase + Vercel config — see Risks)
+### Tier 3 — Strong  ✅ shipped + verified in production 2026-05-19
 - [x] **Stockfish (WASM) AI opponent**, selectable difficulty (Easy / Medium / Hard / Master) via UCI Skill Level + depth
 - [x] **Landing page** `/` with niche pitch + dual CTAs (`/play/ai`, `/play/local`)
 - [x] **Dark / light theme toggle** (system / light / dark cycle, persisted, no-FOUC boot script)
