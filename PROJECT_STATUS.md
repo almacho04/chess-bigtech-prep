@@ -26,7 +26,9 @@
 
 *Most recent first. Append a new dated bullet whenever work meaningfully advances or pivots. 1–3 lines per entry.*
 
-- `2026-05-19` — **Tier 2 (Medium) shipped.** Playable local two-player game: full rules via chess.js, drag-and-drop **and** click-to-move with legal-target highlights, undo/redo, board flip, move history in SAN, status banner (turn / check / mate / stalemate / draw cause), localStorage persistence (`chess.local-game.v1`) with versioned schema. Architecture: pure helpers in [`src/lib/chess/game.ts`](chess-app/src/lib/chess/game.ts), storage isolated in [`src/lib/storage/local-game.ts`](chess-app/src/lib/storage/local-game.ts), single client boundary at [`GameShell`](chess-app/src/components/chess/game-shell.tsx). `npm run build` + `npm run lint` clean. **Next step:** Vercel auto-deploy on push; then start Tier 3 (AI opponent + auth + games table).
+- `2026-05-19` — **Tier 3a shipped — Stockfish AI opponent + landing page.** Stockfish 10 (WASM, ~640 KB) vendored at [`chess-app/public/engines/`](chess-app/public/engines/); browser loads it via Web Worker. Engine wrapper [`src/lib/chess/engine.ts`](chess-app/src/lib/chess/engine.ts) speaks UCI with a promise API. 4 difficulties (Skill Level 0/8/15/20 × depth 5/10/14/18). New routes: `/` is a landing page with niche pitch, `/play/local` is the existing 2-player, `/play/ai` plays vs Stockfish with side selection, live difficulty changes, and 2-ply undo. Shared site header at [`src/components/site/header.tsx`](chess-app/src/components/site/header.tsx). Persists at `chess.ai-game.v1`. `npm run build` + `npm run lint` clean. **Next:** dark/light toggle, then promotion picker.
+- `2026-05-19` — **Vercel production URL confirmed public 200:** https://chess-bigtech-prep.vercel.app  (after fixing Root Directory = `chess-app`). Preview URLs still 401 (Vercel Auth on previews — fine for submission).
+- `2026-05-19` — **Tier 2 (Medium) shipped.** Playable local two-player game: full rules via chess.js, drag-and-drop **and** click-to-move with legal-target highlights, undo/redo, board flip, move history in SAN, status banner (turn / check / mate / stalemate / draw cause), localStorage persistence (`chess.local-game.v1`).
 - `2026-05-19` — **Pushed to GitHub:** https://github.com/almacho04/chess-bigtech-prep (public, `main`). Vercel imported: https://chess-bigtech-prep-ft50dlmbr-almacho04s-projects.vercel.app
 - `2026-05-19` — **Scaffolded Next.js 16 + React 19 + TS + Tailwind v4** in `chess-app/`. Installed `chess.js`, `react-chessboard`, `@supabase/supabase-js`, `@supabase/ssr`, `zod`, `zustand`. Git initialized at the project root (repo contains `material/`, `PROJECT_STATUS.md`, and `chess-app/`).
 - `2026-05-19` — Master tracking document created. Stack (Next.js + TS + Supabase) and niche ("BigTech interview prep") decided. No code yet.
@@ -75,14 +77,16 @@
 - [x] Click-to-move with legal-target highlighting (in addition to drag-and-drop)
 - [x] Board flip control
 
-### Tier 3 — Strong
-- [ ] Stockfish (WASM) AI opponent, selectable difficulty (depth 1 / 5 / 12 / 18)
+### Tier 3 — Strong  (in progress)
+- [x] **Stockfish (WASM) AI opponent**, selectable difficulty (Easy / Medium / Hard / Master) via UCI Skill Level + depth
+- [x] **Landing page** `/` with niche pitch + dual CTAs (`/play/ai`, `/play/local`)
 - [ ] Supabase Auth (email magic-link + Google OAuth)
 - [ ] `games` table in Postgres with Row-Level Security (user can only read/write their own games)
 - [ ] Game history page (list + replay viewer)
-- [ ] Dark / light theme (system-aware, persisted per user)
-- [ ] Mobile-first responsive — playable on a phone in portrait
+- [ ] Dark / light theme toggle (system-aware + manual override, persisted)
+- [x] Mobile-first responsive — playable on a phone in portrait (board + panel stack)
 - [ ] Profile page (display name, ELO, city)
+- [ ] Promotion piece picker (currently auto-queens)
 
 ### Tier 4 — Great  *(the "wow")*
 - [ ] **Multiplayer** via shareable link (Supabase Realtime channel keyed by game ID)

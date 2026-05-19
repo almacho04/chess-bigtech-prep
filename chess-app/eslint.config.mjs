@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored static assets served from /public — third-party code,
+    // not part of our source tree.
+    "public/**",
   ]),
 ]);
 
