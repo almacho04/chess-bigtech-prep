@@ -16,8 +16,8 @@
 **Submission form.** https://nfactorialschool.typeform.com/to/HYVeKeEx
 
 **Required deliverables.**
-- [ ] Live working link (Vercel)
-- [ ] Public GitHub repository
+- [ ] Live working link (Vercel) — *pending manual import*
+- [x] Public GitHub repository — https://github.com/almacho04/chess-bigtech-prep
 - [ ] `README.md` describing what was built, for whom, and why it is valuable
 
 ---
@@ -26,7 +26,8 @@
 
 *Most recent first. Append a new dated bullet whenever work meaningfully advances or pivots. 1–3 lines per entry.*
 
-- `2026-05-19` — **Scaffolded Next.js 16 + React 19 + TS + Tailwind v4** in `chess-app/`. Installed `chess.js`, `react-chessboard`, `@supabase/supabase-js`, `@supabase/ssr`, `zod`, `zustand`. Git initialized at the project root (repo contains `material/`, `PROJECT_STATUS.md`, and `chess-app/`). **Next step:** wire up the basic board (Tier 2 — Medium).
+- `2026-05-19` — **Pushed to GitHub:** https://github.com/almacho04/chess-bigtech-prep (public, `main` branch, single commit). Commit author rewritten to `almacho04` noreply email so it attributes correctly on the profile. **Next step:** import the repo in Vercel (Root Directory = `chess-app`) and start Tier 2 (Medium) work.
+- `2026-05-19` — **Scaffolded Next.js 16 + React 19 + TS + Tailwind v4** in `chess-app/`. Installed `chess.js`, `react-chessboard`, `@supabase/supabase-js`, `@supabase/ssr`, `zod`, `zustand`. Git initialized at the project root (repo contains `material/`, `PROJECT_STATUS.md`, and `chess-app/`).
 - `2026-05-19` — Master tracking document created. Stack (Next.js + TS + Supabase) and niche ("BigTech interview prep") decided. No code yet.
 
 ---
