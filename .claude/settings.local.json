@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(sed -i '' '/eslint-disable-next-line no-console/d' src/lib/chess/engine.ts)",
-      "Bash(npm run *)"
-    ]
-  }
-}
