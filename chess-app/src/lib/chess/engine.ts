@@ -53,17 +53,26 @@ export class StockfishEngine {
   /** Should be called once per game before requesting moves. */
   async newGame(skillLevel: number): Promise<void> {
     await this.init();
+    // Bigger transposition table → faster repeat-position lookups; default 16MB
+    // is too small for serious search. 64MB is plenty for an in-browser engine.
+    this.send("setoption name Hash value 64");
     this.send(`setoption name Skill Level value ${skillLevel}`);
     this.send("ucinewgame");
     this.send("isready");
     await this.waitForLine((l) => l === "readyok");
   }
 
-  /** Ask for the best move from the given FEN. */
+  /**
+   * Ask for the best move from the given FEN. Capped by both time and depth —
+   * Stockfish returns as soon as either limit is reached, so response time
+   * stays predictable instead of varying wildly with position complexity.
+   */
   async bestMove(fen: string, difficulty: Difficulty): Promise<UciMove | null> {
     await this.init();
     this.send(`position fen ${fen}`);
-    this.send(`go depth ${difficulty.depth}`);
+    this.send(
+      `go movetime ${difficulty.movetimeMs} depth ${difficulty.maxDepth}`,
+    );
     const line = await this.waitForLine((l) => l.startsWith("bestmove"));
     return parseBestMove(line);
   }
