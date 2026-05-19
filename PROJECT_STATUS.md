@@ -16,7 +16,7 @@
 **Submission form.** https://nfactorialschool.typeform.com/to/HYVeKeEx
 
 **Required deliverables.**
-- [ ] Live working link (Vercel) — *pending manual import*
+- [x] Live working link (Vercel) — https://chess-bigtech-prep-ft50dlmbr-almacho04s-projects.vercel.app
 - [x] Public GitHub repository — https://github.com/almacho04/chess-bigtech-prep
 - [ ] `README.md` describing what was built, for whom, and why it is valuable
 
@@ -26,7 +26,8 @@
 
 *Most recent first. Append a new dated bullet whenever work meaningfully advances or pivots. 1–3 lines per entry.*
 
-- `2026-05-19` — **Pushed to GitHub:** https://github.com/almacho04/chess-bigtech-prep (public, `main` branch, single commit). Commit author rewritten to `almacho04` noreply email so it attributes correctly on the profile. **Next step:** import the repo in Vercel (Root Directory = `chess-app`) and start Tier 2 (Medium) work.
+- `2026-05-19` — **Tier 2 (Medium) shipped.** Playable local two-player game: full rules via chess.js, drag-and-drop **and** click-to-move with legal-target highlights, undo/redo, board flip, move history in SAN, status banner (turn / check / mate / stalemate / draw cause), localStorage persistence (`chess.local-game.v1`) with versioned schema. Architecture: pure helpers in [`src/lib/chess/game.ts`](chess-app/src/lib/chess/game.ts), storage isolated in [`src/lib/storage/local-game.ts`](chess-app/src/lib/storage/local-game.ts), single client boundary at [`GameShell`](chess-app/src/components/chess/game-shell.tsx). `npm run build` + `npm run lint` clean. **Next step:** Vercel auto-deploy on push; then start Tier 3 (AI opponent + auth + games table).
+- `2026-05-19` — **Pushed to GitHub:** https://github.com/almacho04/chess-bigtech-prep (public, `main`). Vercel imported: https://chess-bigtech-prep-ft50dlmbr-almacho04s-projects.vercel.app
 - `2026-05-19` — **Scaffolded Next.js 16 + React 19 + TS + Tailwind v4** in `chess-app/`. Installed `chess.js`, `react-chessboard`, `@supabase/supabase-js`, `@supabase/ssr`, `zod`, `zustand`. Git initialized at the project root (repo contains `material/`, `PROJECT_STATUS.md`, and `chess-app/`).
 - `2026-05-19` — Master tracking document created. Stack (Next.js + TS + Supabase) and niche ("BigTech interview prep") decided. No code yet.
 
@@ -61,16 +62,18 @@
 > Flip checkboxes as features ship. The Tier checklists below will be lifted nearly verbatim into the README at submission.
 
 ### Tier 1 — Weak  *(subsumed by Medium; no separate phase)*
-- [ ] 8×8 board renders with starting position
-- [ ] Pieces drag-and-droppable (no rule check)
+- [x] 8×8 board renders with starting position
+- [x] Pieces drag-and-droppable (no rule check)
 
-### Tier 2 — Medium
-- [ ] `chess.js` integrated; only legal moves allowed
-- [ ] Castling, en passant, promotion, check / mate / stalemate all detected
-- [ ] Local 2-player on one screen
-- [ ] Game state persisted to `localStorage` (resume in-progress game)
-- [ ] Move history panel in algebraic notation
-- [ ] Undo / redo on local games
+### Tier 2 — Medium  ✅ shipped 2026-05-19
+- [x] `chess.js` integrated; only legal moves allowed
+- [x] Castling, en passant, promotion (auto-queen for now), check / mate / stalemate / draw detection
+- [x] Local 2-player on one screen
+- [x] Game state persisted to `localStorage` (resume in-progress game on reload)
+- [x] Move history panel in algebraic notation
+- [x] Undo / redo on local games
+- [x] Click-to-move with legal-target highlighting (in addition to drag-and-drop)
+- [x] Board flip control
 
 ### Tier 3 — Strong
 - [ ] Stockfish (WASM) AI opponent, selectable difficulty (depth 1 / 5 / 12 / 18)
