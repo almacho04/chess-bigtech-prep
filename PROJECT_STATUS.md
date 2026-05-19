@@ -16,9 +16,9 @@
 **Submission form.** https://nfactorialschool.typeform.com/to/HYVeKeEx
 
 **Required deliverables.**
-- [x] Live working link (Vercel) — https://chess-bigtech-prep-ft50dlmbr-almacho04s-projects.vercel.app
+- [x] Live working link (Vercel) — https://chess-bigtech-prep.vercel.app
 - [x] Public GitHub repository — https://github.com/almacho04/chess-bigtech-prep
-- [ ] `README.md` describing what was built, for whom, and why it is valuable
+- [x] `README.md` describing what was built, for whom, and why it is valuable — see [`README.md`](README.md)
 
 ---
 
@@ -99,7 +99,7 @@
 - [ ] **Post-game AI Coach:** Stockfish flags blunders → Claude API plain-language coaching — *deferred, no Anthropic key*
 - [ ] City-based leaderboard — *deferred*
 - [ ] Stripe Pro tier — *deferred*
-- [ ] README with screenshots/GIFs, niche pitch, monetization story
+- [x] README at the repo root with niche pitch, architecture diagram, monetization story, what's-next roadmap
 
 ---
 
