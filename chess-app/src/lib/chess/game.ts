@@ -90,3 +90,16 @@ export function legalTargetsFrom(chess: Chess, square: string): string[] {
     return [];
   }
 }
+
+export function isPromotionMove(
+  chess: Chess,
+  from: string,
+  to: string,
+): boolean {
+  try {
+    const moves = chess.moves({ square: from as never, verbose: true });
+    return moves.some((m) => m.to === to && Boolean(m.promotion));
+  } catch {
+    return false;
+  }
+}

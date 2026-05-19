@@ -6,6 +6,7 @@ import {
   createGame,
   describeStatus,
   historyToRecords,
+  isPromotionMove,
   legalTargetsFrom,
   tryMove,
   type MoveRecord,
@@ -19,9 +20,14 @@ import {
 import { StockfishEngine } from "@/lib/chess/engine";
 import { Board } from "./board";
 import { MoveHistory } from "./move-history";
+import {
+  PromotionPicker,
+  type PromotionPiece,
+} from "./promotion-picker";
 import { StatusBanner } from "./status-banner";
 
 type HumanColor = "w" | "b";
+type PendingPromotion = { from: string; to: string; color: HumanColor };
 
 const STORAGE_KEY = "chess.ai-game.v1";
 
@@ -89,6 +95,8 @@ export function AiGameShell() {
   const [engineState, setEngineState] = useState<
     "loading" | "ready" | "thinking" | "error"
   >("loading");
+  const [pendingPromotion, setPendingPromotion] =
+    useState<PendingPromotion | null>(null);
 
   const difficulty = useMemo(
     () => getDifficulty(difficultyId),
@@ -191,10 +199,10 @@ export function AiGameShell() {
   }, [fen, humanColor, difficultyId, mounted, engineState, status.kind, syncFromChess]);
 
   const applyHumanMove = useCallback(
-    (from: string, to: string) => {
+    (from: string, to: string, promotion?: PromotionPiece) => {
       if (!isHumanTurn) return false;
       if (engineState === "thinking") return false;
-      const move = tryMove(chessRef.current, from, to);
+      const move = tryMove(chessRef.current, from, to, promotion);
       if (!move) return false;
       setSelectedSquare(null);
       syncFromChess();
@@ -202,6 +210,32 @@ export function AiGameShell() {
     },
     [engineState, isHumanTurn, syncFromChess],
   );
+
+  const attemptHumanMove = useCallback(
+    (from: string, to: string): boolean => {
+      if (!isHumanTurn) return false;
+      if (engineState === "thinking") return false;
+      if (isPromotionMove(new Chess(fen), from, to)) {
+        setPendingPromotion({ from, to, color: humanColor });
+        return false; // snap back; picker appears
+      }
+      return applyHumanMove(from, to);
+    },
+    [applyHumanMove, engineState, fen, humanColor, isHumanTurn],
+  );
+
+  const onPromotionPick = useCallback(
+    (piece: PromotionPiece) => {
+      if (!pendingPromotion) return;
+      applyHumanMove(pendingPromotion.from, pendingPromotion.to, piece);
+      setPendingPromotion(null);
+    },
+    [applyHumanMove, pendingPromotion],
+  );
+
+  const onPromotionCancel = useCallback(() => {
+    setPendingPromotion(null);
+  }, []);
 
   const onPieceDrop = useCallback(
     ({
@@ -212,23 +246,27 @@ export function AiGameShell() {
       targetSquare: string | null;
     }) => {
       if (!targetSquare) return false;
-      return applyHumanMove(sourceSquare, targetSquare);
+      return attemptHumanMove(sourceSquare, targetSquare);
     },
-    [applyHumanMove],
+    [attemptHumanMove],
   );
 
   const onSquareClick = useCallback(
     (square: string) => {
       if (!isHumanTurn) return;
       if (selectedSquare && selectedSquare !== square) {
-        const ok = applyHumanMove(selectedSquare, square);
+        const ok = attemptHumanMove(selectedSquare, square);
         if (ok) return;
+        if (pendingPromotion) {
+          setSelectedSquare(null);
+          return;
+        }
       }
       const targets = legalTargetsFrom(new Chess(fen), square);
       // Only let humans select their own pieces (legalTargets returns [] otherwise)
       setSelectedSquare(targets.length > 0 ? square : null);
     },
-    [applyHumanMove, fen, isHumanTurn, selectedSquare],
+    [attemptHumanMove, fen, isHumanTurn, pendingPromotion, selectedSquare],
   );
 
   const onUndo = useCallback(() => {
@@ -348,6 +386,12 @@ export function AiGameShell() {
         />
         <MoveHistory moves={moves} />
       </div>
+      <PromotionPicker
+        open={pendingPromotion !== null}
+        color={pendingPromotion?.color ?? humanColor}
+        onPick={onPromotionPick}
+        onCancel={onPromotionCancel}
+      />
     </div>
   );
 }

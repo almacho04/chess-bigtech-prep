@@ -6,6 +6,7 @@ import {
   createGame,
   describeStatus,
   historyToRecords,
+  isPromotionMove,
   legalTargetsFrom,
   tryMove,
   type MoveRecord,
@@ -18,9 +19,14 @@ import {
 import { Board } from "./board";
 import { Controls } from "./controls";
 import { MoveHistory } from "./move-history";
+import {
+  PromotionPicker,
+  type PromotionPiece,
+} from "./promotion-picker";
 import { StatusBanner } from "./status-banner";
 
 type Orientation = "white" | "black";
+type PendingPromotion = { from: string; to: string; color: "w" | "b" };
 
 export function GameShell() {
   const chessRef = useRef<Chess>(new Chess());
@@ -30,6 +36,8 @@ export function GameShell() {
   const [orientation, setOrientation] = useState<Orientation>("white");
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [pendingPromotion, setPendingPromotion] =
+    useState<PendingPromotion | null>(null);
 
   // Hydrate from localStorage on mount
   useEffect(() => {
@@ -60,8 +68,8 @@ export function GameShell() {
   }, []);
 
   const applyMove = useCallback(
-    (from: string, to: string) => {
-      const move = tryMove(chessRef.current, from, to);
+    (from: string, to: string, promotion?: PromotionPiece) => {
+      const move = tryMove(chessRef.current, from, to, promotion);
       if (!move) return false;
       setRedoStack([]);
       setSelectedSquare(null);
@@ -70,6 +78,33 @@ export function GameShell() {
     },
     [syncFromChess],
   );
+
+  const attemptMove = useCallback(
+    (from: string, to: string): boolean => {
+      // Detect promotions BEFORE applying so we can ask the user which piece.
+      // The check uses a fresh Chess from `fen` to avoid reading the ref here.
+      if (isPromotionMove(new Chess(fen), from, to)) {
+        const turnColor = (fen.split(" ")[1] === "b" ? "b" : "w") as "w" | "b";
+        setPendingPromotion({ from, to, color: turnColor });
+        return false; // snap piece back; picker appears
+      }
+      return applyMove(from, to);
+    },
+    [applyMove, fen],
+  );
+
+  const onPromotionPick = useCallback(
+    (piece: PromotionPiece) => {
+      if (!pendingPromotion) return;
+      applyMove(pendingPromotion.from, pendingPromotion.to, piece);
+      setPendingPromotion(null);
+    },
+    [applyMove, pendingPromotion],
+  );
+
+  const onPromotionCancel = useCallback(() => {
+    setPendingPromotion(null);
+  }, []);
 
   const onPieceDrop = useCallback(
     ({
@@ -80,22 +115,28 @@ export function GameShell() {
       targetSquare: string | null;
     }) => {
       if (!targetSquare) return false;
-      return applyMove(sourceSquare, targetSquare);
+      return attemptMove(sourceSquare, targetSquare);
     },
-    [applyMove],
+    [attemptMove],
   );
 
   const onSquareClick = useCallback(
     (square: string) => {
       if (selectedSquare && selectedSquare !== square) {
-        const ok = applyMove(selectedSquare, square);
+        const ok = attemptMove(selectedSquare, square);
         if (ok) return;
+        // If a promotion picker was opened, attemptMove returned false but we
+        // still want to deselect the source square so it's not stuck-highlighted.
+        if (pendingPromotion) {
+          setSelectedSquare(null);
+          return;
+        }
       }
       // Toggle / re-select: only select squares that have a movable piece for the side to move
       const targets = legalTargetsFrom(chessRef.current, square);
       setSelectedSquare(targets.length > 0 ? square : null);
     },
-    [applyMove, selectedSquare],
+    [attemptMove, pendingPromotion, selectedSquare],
   );
 
   const onUndo = useCallback(() => {
@@ -199,6 +240,12 @@ export function GameShell() {
         />
         <MoveHistory moves={moves} />
       </div>
+      <PromotionPicker
+        open={pendingPromotion !== null}
+        color={pendingPromotion?.color ?? "w"}
+        onPick={onPromotionPick}
+        onCancel={onPromotionCancel}
+      />
     </div>
   );
 }

@@ -26,6 +26,7 @@
 
 *Most recent first. Append a new dated bullet whenever work meaningfully advances or pivots. 1–3 lines per entry.*
 
+- `2026-05-19` — **Tier 3b + 3c shipped.** Theme toggle (system / light / dark) with a no-FOUC boot script in `<head>`; Tailwind `dark:` variant switched from `prefers-color-scheme` to a `data-theme` attribute. Promotion piece picker modal in both shells (Q/R/B/N + keyboard shortcuts + Escape to cancel); AI promotion moves still apply automatically from UCI. **Next:** Tier 3d — Supabase auth + games table + history (needs user to create a Supabase project).
 - `2026-05-19` — **Tier 3a shipped — Stockfish AI opponent + landing page.** Stockfish 10 (WASM, ~640 KB) vendored at [`chess-app/public/engines/`](chess-app/public/engines/); browser loads it via Web Worker. Engine wrapper [`src/lib/chess/engine.ts`](chess-app/src/lib/chess/engine.ts) speaks UCI with a promise API. 4 difficulties (Skill Level 0/8/15/20 × depth 5/10/14/18). New routes: `/` is a landing page with niche pitch, `/play/local` is the existing 2-player, `/play/ai` plays vs Stockfish with side selection, live difficulty changes, and 2-ply undo. Shared site header at [`src/components/site/header.tsx`](chess-app/src/components/site/header.tsx). Persists at `chess.ai-game.v1`. `npm run build` + `npm run lint` clean. **Next:** dark/light toggle, then promotion picker.
 - `2026-05-19` — **Vercel production URL confirmed public 200:** https://chess-bigtech-prep.vercel.app  (after fixing Root Directory = `chess-app`). Preview URLs still 401 (Vercel Auth on previews — fine for submission).
 - `2026-05-19` — **Tier 2 (Medium) shipped.** Playable local two-player game: full rules via chess.js, drag-and-drop **and** click-to-move with legal-target highlights, undo/redo, board flip, move history in SAN, status banner (turn / check / mate / stalemate / draw cause), localStorage persistence (`chess.local-game.v1`).
@@ -80,13 +81,13 @@
 ### Tier 3 — Strong  (in progress)
 - [x] **Stockfish (WASM) AI opponent**, selectable difficulty (Easy / Medium / Hard / Master) via UCI Skill Level + depth
 - [x] **Landing page** `/` with niche pitch + dual CTAs (`/play/ai`, `/play/local`)
-- [ ] Supabase Auth (email magic-link + Google OAuth)
-- [ ] `games` table in Postgres with Row-Level Security (user can only read/write their own games)
-- [ ] Game history page (list + replay viewer)
-- [ ] Dark / light theme toggle (system-aware + manual override, persisted)
+- [x] **Dark / light theme toggle** (system / light / dark cycle, persisted, no-FOUC boot script)
+- [x] **Promotion piece picker** (Q/R/B/N modal with keyboard shortcuts, both shells)
 - [x] Mobile-first responsive — playable on a phone in portrait (board + panel stack)
+- [ ] Supabase Auth (email magic-link)
+- [ ] `games` table in Postgres with Row-Level Security
+- [ ] Game history page (list + replay viewer)
 - [ ] Profile page (display name, ELO, city)
-- [ ] Promotion piece picker (currently auto-queens)
 
 ### Tier 4 — Great  *(the "wow")*
 - [ ] **Multiplayer** via shareable link (Supabase Realtime channel keyed by game ID)
