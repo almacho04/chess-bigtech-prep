@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Chess } from "chess.js";
-import { Board } from "./board";
+import { Board, type BoardArrow } from "./board";
 import type { MoveRecord } from "@/lib/chess/game";
 
 type ReplayProps = {
@@ -73,8 +73,33 @@ export function ReplayViewer({ pgn, orientation = "white" }: ReplayProps) {
   }, [replay.fens.length]);
 
   const fen = replay.fens[index] ?? replay.fens[0];
+  const activeMove = index > 0 ? replay.moves[index - 1] : null;
   const atStart = index === 0;
   const atEnd = index === replay.fens.length - 1;
+
+  const boardArrows = useMemo<BoardArrow[]>(() => {
+    if (!activeMove) return [];
+    return [
+      {
+        startSquare: activeMove.from,
+        endSquare: activeMove.to,
+        color: "#2563eb",
+      },
+    ];
+  }, [activeMove]);
+
+  const highlightedSquares = useMemo<Record<string, React.CSSProperties>>(() => {
+    if (!activeMove) return {};
+    return {
+      [activeMove.from]: {
+        boxShadow: "inset 0 0 0 4px rgba(37, 99, 235, 0.35)",
+      },
+      [activeMove.to]: {
+        background:
+          "radial-gradient(circle, rgba(37,99,235,0.45) 38%, transparent 42%)",
+      },
+    };
+  }, [activeMove]);
 
   const movesPaired = useMemo(() => {
     const pairs: { no: number; white?: MoveRecord; black?: MoveRecord }[] = [];
@@ -92,9 +117,12 @@ export function ReplayViewer({ pgn, orientation = "white" }: ReplayProps) {
     <div className="flex flex-col gap-4 md:flex-row">
       <div className="md:flex-1">
         <Board
+          id="replay-board"
           fen={fen}
           orientation={boardOrientation}
           onPieceDrop={() => false}
+          highlightedSquares={highlightedSquares}
+          arrows={boardArrows}
           disabled
         />
       </div>

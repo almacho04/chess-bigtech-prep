@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StockfishEngine } from "@/lib/chess/engine";
+import { Board, type BoardArrow } from "./board";
 import {
   analyzeGame,
   type AnalysisProgress,
@@ -146,13 +147,28 @@ export function CoachPanel({ pgn }: { pgn: string }) {
           No significant blunders or mistakes detected. Clean game.
         </p>
       ) : (
-        <ul className="mt-3 flex flex-col gap-3">
-          {state.blunders.map((b) => (
-            <BlunderRow key={b.ply} blunder={b} />
-          ))}
-        </ul>
+        <>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <LegendDot color="bg-red-500" label="played mistake" />
+            <LegendDot color="bg-emerald-500" label="better move" />
+          </div>
+          <ul className="mt-3 flex flex-col gap-3">
+            {state.blunders.map((b) => (
+              <BlunderRow key={b.ply} blunder={b} />
+            ))}
+          </ul>
+        </>
       )}
     </section>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-foreground/10 px-2 py-1 text-foreground/60">
+      <span className={`h-2 w-2 rounded-full ${color}`} aria-hidden />
+      {label}
+    </span>
   );
 }
 
@@ -202,46 +218,158 @@ function BlunderRow({ blunder }: { blunder: Blunder }) {
     <li
       className={`rounded-md border p-3 text-sm ${severityClasses(blunder.severity)}`}
     >
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="font-mono text-xs text-foreground/55">
-          {blunder.moveNumber}.{blunder.color === "b" ? ".." : ""}
-        </span>
-        <span className="font-mono font-semibold">{blunder.san}</span>
-        <span className="text-xs uppercase tracking-wide opacity-80">
-          {blunder.severity}
-        </span>
-        <span
-          className="ml-auto font-mono text-xs"
-          title={`Eval dropped by ${(blunder.evalDropCp / 100).toFixed(2)} pawn-equivalents. 1 pawn ≈ 100 centipawns.`}
-        >
-          −{(blunder.evalDropCp / 100).toFixed(1)} ({pawnDescriptor(blunder.evalDropCp)})
-        </span>
-      </div>
-      {response ? (
-        <>
-          <p className="mt-2 text-sm leading-relaxed">{response.explanation}</p>
-          {canRetry ? (
+      <div className="grid gap-3 md:grid-cols-[minmax(220px,0.95fr)_1fr]">
+        <MistakeBoard blunder={blunder} />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="font-mono text-xs text-foreground/55">
+              {blunder.moveNumber}.{blunder.color === "b" ? ".." : ""}
+            </span>
+            <span className="font-mono font-semibold">{blunder.san}</span>
+            <span className="text-xs uppercase tracking-wide opacity-80">
+              {blunder.severity}
+            </span>
+            <span
+              className="ml-auto font-mono text-xs"
+              title={`Eval dropped by ${(blunder.evalDropCp / 100).toFixed(2)} pawn-equivalents. 1 pawn ≈ 100 centipawns.`}
+            >
+              −{(blunder.evalDropCp / 100).toFixed(1)} (
+              {pawnDescriptor(blunder.evalDropCp)})
+            </span>
+          </div>
+
+          <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+            <MoveBadge
+              label="Played"
+              value={`${blunder.san} (${blunder.from}${blunder.to})`}
+              tone="bad"
+            />
+            <MoveBadge
+              label="Better"
+              value={
+                blunder.bestMoveSan && blunder.bestMoveUci
+                  ? `${blunder.bestMoveSan} (${blunder.bestMoveUci})`
+                  : "Stockfish did not return a move"
+              }
+              tone="good"
+            />
+          </div>
+
+          {response ? (
+            <>
+              <p className="mt-2 text-sm leading-relaxed">
+                {response.explanation}
+              </p>
+              {canRetry ? (
+                <button
+                  type="button"
+                  onClick={fetchExplanation}
+                  disabled={loading}
+                  className="mt-2 text-xs underline decoration-dotted underline-offset-2 hover:opacity-80 disabled:opacity-50"
+                >
+                  {loading ? "Retrying…" : "Retry"}
+                </button>
+              ) : null}
+            </>
+          ) : (
             <button
               type="button"
               onClick={fetchExplanation}
               disabled={loading}
-              className="mt-2 text-xs underline decoration-dotted underline-offset-2 hover:opacity-80 disabled:opacity-50"
+              className="mt-2 inline-flex items-center text-xs underline decoration-dotted underline-offset-2 hover:opacity-80 disabled:opacity-50"
             >
-              {loading ? "Retrying…" : "Retry"}
+              {loading ? "Loading coach…" : "Coach says…"}
             </button>
-          ) : null}
-        </>
-      ) : (
-        <button
-          type="button"
-          onClick={fetchExplanation}
-          disabled={loading}
-          className="mt-2 inline-flex items-center text-xs underline decoration-dotted underline-offset-2 hover:opacity-80 disabled:opacity-50"
-        >
-          {loading ? "Loading coach…" : "💡 Coach says…"}
-        </button>
-      )}
+          )}
+        </div>
+      </div>
     </li>
+  );
+}
+
+function MistakeBoard({ blunder }: { blunder: Blunder }) {
+  const arrows: BoardArrow[] = [
+    {
+      startSquare: blunder.from,
+      endSquare: blunder.to,
+      color: "#ef4444",
+    },
+  ];
+
+  if (
+    blunder.bestMoveFrom &&
+    blunder.bestMoveTo &&
+    (blunder.bestMoveFrom !== blunder.from || blunder.bestMoveTo !== blunder.to)
+  ) {
+    arrows.push({
+      startSquare: blunder.bestMoveFrom,
+      endSquare: blunder.bestMoveTo,
+      color: "#10b981",
+    });
+  }
+
+  const highlightedSquares: Record<string, React.CSSProperties> = {
+    [blunder.from]: {
+      boxShadow: "inset 0 0 0 4px rgba(239, 68, 68, 0.38)",
+    },
+    [blunder.to]: {
+      background:
+        "radial-gradient(circle, rgba(239,68,68,0.45) 38%, transparent 42%)",
+    },
+  };
+
+  if (blunder.bestMoveFrom) {
+    highlightedSquares[blunder.bestMoveFrom] = {
+      ...(highlightedSquares[blunder.bestMoveFrom] ?? {}),
+      boxShadow: "inset 0 0 0 4px rgba(16, 185, 129, 0.38)",
+    };
+  }
+  if (blunder.bestMoveTo) {
+    highlightedSquares[blunder.bestMoveTo] = {
+      ...(highlightedSquares[blunder.bestMoveTo] ?? {}),
+      background:
+        "radial-gradient(circle, rgba(16,185,129,0.45) 38%, transparent 42%)",
+    };
+  }
+
+  return (
+    <div className="rounded-md border border-foreground/10 bg-background/60 p-2">
+      <Board
+        id={`coach-mistake-${blunder.ply}`}
+        fen={blunder.fenBefore}
+        orientation={blunder.color === "w" ? "white" : "black"}
+        onPieceDrop={() => false}
+        highlightedSquares={highlightedSquares}
+        arrows={arrows}
+        disabled
+      />
+      <div className="mt-2 text-center text-[11px] text-foreground/55">
+        Position before the mistake
+      </div>
+    </div>
+  );
+}
+
+function MoveBadge({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "bad" | "good";
+}) {
+  const palette =
+    tone === "bad"
+      ? "border-red-500/30 bg-red-500/[0.06]"
+      : "border-emerald-500/30 bg-emerald-500/[0.06]";
+  return (
+    <div className={`rounded-md border px-2 py-1.5 ${palette}`}>
+      <div className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+        {label}
+      </div>
+      <div className="mt-0.5 truncate font-mono">{value}</div>
+    </div>
   );
 }
 

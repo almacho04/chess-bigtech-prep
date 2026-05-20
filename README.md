@@ -44,7 +44,7 @@ A chess web app where the marketing pitch isn't *"play chess online"* — it's *
 - [x] **Magic-link auth** via Supabase (email)
 - [x] **Game history** with per-game **replay viewer** — step buttons, keyboard nav (←/→/Home/End), click-to-jump on the move list
 - [x] **Auto-save** completed games (PGN + result + move count) to Postgres with row-level security
-- [x] **Post-game AI Coach prototype** — Stockfish flags mistakes; optional Gemini explanations when `GEMINI_API_KEY` is configured
+- [x] **Visual post-game AI Coach** — Stockfish flags mistakes, shows red/green arrows for played/better moves, and adds optional Gemini explanations when `GEMINI_API_KEY` is configured
 - [x] **Dark / light theme** with a no-FOUC boot script, system / light / dark cycle, persisted
 - [x] **Mobile-first responsive** — playable on a phone in portrait
 - [x] **localStorage** persistence on every play surface — close the tab, come back, resume

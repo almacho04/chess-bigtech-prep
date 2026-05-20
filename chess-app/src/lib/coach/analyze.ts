@@ -1,5 +1,6 @@
 import { Chess } from "chess.js";
 import type { StockfishEngine } from "@/lib/chess/engine";
+import type { Difficulty } from "@/lib/chess/difficulty";
 
 export type Severity = "inaccuracy" | "mistake" | "blunder";
 
@@ -10,12 +11,20 @@ export type Blunder = {
   moveNumber: number;
   /** SAN of the move that was played. */
   san: string;
+  /** Source square of the move that was played. */
+  from: string;
+  /** Target square of the move that was played. */
+  to: string;
   /** FEN of the position BEFORE the move. */
   fenBefore: string;
   /** FEN of the position AFTER the move. */
   fenAfter: string;
   /** Best move Stockfish would have played from the same position (SAN). */
   bestMoveSan: string | null;
+  /** Best move as UCI coordinates, used for arrows/highlights. */
+  bestMoveUci: string | null;
+  bestMoveFrom: string | null;
+  bestMoveTo: string | null;
   /** Eval before move (centipawns, from white's POV). */
   evalBeforeCp: number;
   /** Eval after move (centipawns, from white's POV). */
@@ -121,17 +130,18 @@ export async function analyzeGame(
     const severity = classify(dropCp, config);
     if (!severity) continue;
 
-    // What was the best alternative? Ask the engine for bestmove at the prior FEN.
-    // Skip this for speed in the MVP — fill bestMoveSan with null and let the
-    // explain step include it later if needed. (Bumping cost from 1 to 2 evals
-    // per move would double total analysis time.)
     blunders.push({
       ply: i,
       moveNumber: Math.floor(i / 2) + 1,
       san: m.san,
+      from: m.from,
+      to: m.to,
       fenBefore: fens[i],
       fenAfter: fens[i + 1],
       bestMoveSan: null,
+      bestMoveUci: null,
+      bestMoveFrom: null,
+      bestMoveTo: null,
       evalBeforeCp: before,
       evalAfterCp: after,
       evalDropCp: dropCp,
@@ -140,5 +150,45 @@ export async function analyzeGame(
     });
   }
 
+  for (const b of blunders) {
+    if (config.shouldCancel?.()) return [];
+    const best = await engine.bestMove(
+      b.fenBefore,
+      coachDifficulty(config.depth),
+    );
+    if (best) {
+      const san = sanForMove(b.fenBefore, best.from, best.to, best.promotion);
+      b.bestMoveSan = san;
+      b.bestMoveUci = `${best.from}${best.to}${best.promotion ?? ""}`;
+      b.bestMoveFrom = best.from;
+      b.bestMoveTo = best.to;
+    }
+  }
+
   return blunders;
+}
+
+function coachDifficulty(depth: number): Difficulty {
+  return {
+    id: "master",
+    label: "Coach",
+    description: "Coach analysis",
+    skillLevel: 20,
+    depth,
+  };
+}
+
+function sanForMove(
+  fen: string,
+  from: string,
+  to: string,
+  promotion?: "q" | "r" | "b" | "n",
+): string | null {
+  try {
+    const chess = new Chess(fen);
+    const move = chess.move({ from, to, promotion });
+    return move?.san ?? null;
+  } catch {
+    return null;
+  }
 }
