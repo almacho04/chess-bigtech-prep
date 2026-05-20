@@ -1,6 +1,7 @@
 import { Chess } from "chess.js";
 import type { StockfishEngine } from "@/lib/chess/engine";
 import type { Difficulty } from "@/lib/chess/difficulty";
+import type { ClusterId } from "@/lib/training/clusters";
 
 export type Severity = "inaccuracy" | "mistake" | "blunder";
 
@@ -25,6 +26,8 @@ export type Blunder = {
   bestMoveUci: string | null;
   bestMoveFrom: string | null;
   bestMoveTo: string | null;
+  /** Tutor themes inferred from the mistake. Feeds profile/training memory. */
+  themes: ClusterId[];
   /** Eval before move (centipawns, from white's POV). */
   evalBeforeCp: number;
   /** Eval after move (centipawns, from white's POV). */
@@ -142,6 +145,7 @@ export async function analyzeGame(
       bestMoveUci: null,
       bestMoveFrom: null,
       bestMoveTo: null,
+      themes: [],
       evalBeforeCp: before,
       evalAfterCp: after,
       evalDropCp: dropCp,
@@ -163,9 +167,70 @@ export async function analyzeGame(
       b.bestMoveFrom = best.from;
       b.bestMoveTo = best.to;
     }
+    b.themes = classifyBlunderThemes(b);
   }
 
   return blunders;
+}
+
+function classifyBlunderThemes(blunder: Blunder): ClusterId[] {
+  const themes = new Set<ClusterId>();
+
+  if (blunder.bestMoveSan?.includes("#")) themes.add("mateIn1");
+  if (playedMoveHangsPiece(blunder)) themes.add("hangingPiece");
+  if (bestMoveLooksLikeFork(blunder)) themes.add("fork");
+  if (bestMoveLooksLikePin(blunder)) themes.add("pin");
+
+  // Generic calculation miss: Stockfish found a tactical improvement, but the
+  // MVP heuristics cannot confidently map it to fork/pin/hanging material.
+  if (themes.size === 0) themes.add("mateIn2");
+
+  return [...themes].slice(0, 2);
+}
+
+function playedMoveHangsPiece(blunder: Blunder): boolean {
+  try {
+    const after = new Chess(blunder.fenAfter);
+    const piece = after.get(blunder.to as never);
+    if (!piece || piece.color !== blunder.color || piece.type === "k") {
+      return false;
+    }
+    const opponent = blunder.color === "w" ? "b" : "w";
+    return (
+      after.isAttacked(blunder.to as never, opponent) &&
+      !after.isAttacked(blunder.to as never, blunder.color)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function bestMoveLooksLikeFork(blunder: Blunder): boolean {
+  const bestPiece = pieceAt(blunder.fenBefore, blunder.bestMoveFrom);
+  if (!bestPiece) return false;
+  if (bestPiece.type === "n") return true;
+  return Boolean(
+    blunder.bestMoveSan?.includes("+") &&
+      ["q", "r", "b"].includes(bestPiece.type) &&
+      blunder.evalDropCp >= 100,
+  );
+}
+
+function bestMoveLooksLikePin(blunder: Blunder): boolean {
+  const bestPiece = pieceAt(blunder.fenBefore, blunder.bestMoveFrom);
+  if (!bestPiece) return false;
+  if (!["b", "r", "q"].includes(bestPiece.type)) return false;
+  if (blunder.bestMoveSan?.includes("#")) return false;
+  return Boolean(blunder.bestMoveSan?.includes("x") || blunder.bestMoveSan?.includes("+"));
+}
+
+function pieceAt(fen: string, square: string | null) {
+  if (!square) return null;
+  try {
+    return new Chess(fen).get(square as never) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function coachDifficulty(depth: number): Difficulty {

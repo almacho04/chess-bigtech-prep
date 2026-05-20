@@ -4,6 +4,10 @@ import { SiteHeader } from "@/components/site/header";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listGames } from "@/lib/supabase/games";
 import {
+  listGameAnalyses,
+  type GameAnalysisRow,
+} from "@/lib/supabase/game-analysis";
+import {
   listThemeStats,
   summarizeThemeStat,
   totalTutorXp,
@@ -24,14 +28,15 @@ export default async function CoachPage() {
     redirect("/?auth_required=coach");
   }
 
-  const [themeRows, games] = await Promise.all([
+  const [themeRows, games, gameAnalyses] = await Promise.all([
     listThemeStats(supabase),
     listGames(supabase, user.id, 20),
+    listGameAnalyses(supabase, user.id, 20),
   ]);
 
   const stats = themeRows.map(summarizeThemeStat);
   const puzzleXp = totalTutorXp(themeRows);
-  const gameXp = games.length * 15;
+  const gameXp = games.length * 15 + gameAnalyses.length * 30;
   const totalXp = puzzleXp + gameXp;
   const level = Math.floor(totalXp / 100) + 1;
   const levelProgress = totalXp % 100;
@@ -60,7 +65,8 @@ export default async function CoachPage() {
     )
     .slice(0, 3);
 
-  const focusTheme = chooseFocusTheme(weakSpots, stats);
+  const gameWeakSpots = aggregateGameWeaknesses(gameAnalyses);
+  const focusTheme = chooseFocusTheme(weakSpots, stats, gameWeakSpots);
   const focusCluster = getCluster(focusTheme);
 
   return (
@@ -76,14 +82,14 @@ export default async function CoachPage() {
         <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-              Personal tutor v1
+              Personal tutor v2
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">
               Your chess profile
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-foreground/70 md:text-base">
-              The tutor remembers your puzzle results, finds weak themes, and
-              turns them into a short training mission.
+              The tutor remembers puzzle results and saved game reviews, finds
+              weak themes, and turns them into a short training mission.
             </p>
           </div>
           <Link
@@ -108,7 +114,7 @@ export default async function CoachPage() {
           <MetricCard
             label="Saved games"
             value={`${games.length}`}
-            detail="+15 XP per finished game"
+            detail={`${gameAnalyses.length} analyzed`}
           />
           <MetricCard
             label="Focus now"
@@ -134,6 +140,66 @@ export default async function CoachPage() {
           />
         </div>
 
+        <section className="mt-6 rounded-lg border border-foreground/10 p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/55">
+              Real-game memory
+            </h2>
+            <Link
+              href="/history"
+              className="text-xs text-foreground/55 hover:text-foreground"
+            >
+              Review saved games →
+            </Link>
+          </div>
+          {gameAnalyses.length === 0 ? (
+            <div className="mt-3 rounded-md border border-dashed border-foreground/15 p-4">
+              <div className="text-sm font-medium">
+                No analyzed games yet
+              </div>
+              <p className="mt-1 text-sm text-foreground/60">
+                Open a saved game, run AI Coach, and the tutor will persist the
+                mistake themes here.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="rounded-md border border-amber-500/25 bg-amber-500/[0.04] p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  Most common from games
+                </div>
+                <ul className="mt-2 flex flex-col gap-2">
+                  {gameWeakSpots.map((item) => {
+                    const cluster = getCluster(item.theme);
+                    return (
+                      <li
+                        key={item.theme}
+                        className="flex items-center justify-between gap-2 text-sm"
+                      >
+                        <span>
+                          <span aria-hidden>{cluster.icon}</span>{" "}
+                          {cluster.label}
+                        </span>
+                        <span className="font-mono text-xs text-foreground/55">
+                          score {item.score}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+              <div className="rounded-md border border-foreground/10 p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-foreground/50">
+                  Latest review
+                </div>
+                <p className="mt-2 text-sm text-foreground/70">
+                  {gameAnalyses[0]?.summary}
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+
         <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="rounded-lg border border-sky-500/25 bg-sky-500/[0.04] p-5">
             <div className="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
@@ -143,8 +209,8 @@ export default async function CoachPage() {
               Train {focusCluster.label.toLowerCase()}
             </h2>
             <p className="mt-2 text-sm text-foreground/70">
-              Do one focused cluster, then play a short AI game. That gives the
-              tutor fresh puzzle data plus a real-game sample.
+              Do one focused cluster, then review one saved game. That gives
+              the tutor fresh puzzle data plus a real-game mistake sample.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
@@ -175,7 +241,7 @@ export default async function CoachPage() {
             <ul className="mt-3 flex flex-col gap-2 text-sm text-foreground/70">
               <li>Pass a puzzle: theme XP and streak go up.</li>
               <li>Miss a puzzle: that theme gets higher priority.</li>
-              <li>Training recommends a mix of weak spots and diagnostics.</li>
+              <li>Analyze a game: mistakes are tagged and saved as memory.</li>
             </ul>
           </section>
         </div>
@@ -187,10 +253,43 @@ export default async function CoachPage() {
 function chooseFocusTheme(
   weakSpots: readonly ThemeStatSummary[],
   stats: readonly ThemeStatSummary[],
+  gameWeakSpots: readonly GameWeakSpot[],
 ): ClusterId {
   if (weakSpots[0]) return weakSpots[0].theme;
+  if (gameWeakSpots[0]) return gameWeakSpots[0].theme;
   const seen = new Set(stats.map((s) => s.theme));
   return STARTER_FOCUS.find((id) => !seen.has(id)) ?? STARTER_FOCUS[0];
+}
+
+type GameWeakSpot = {
+  theme: ClusterId;
+  score: number;
+};
+
+function aggregateGameWeaknesses(
+  analyses: readonly GameAnalysisRow[],
+): GameWeakSpot[] {
+  const scores = new Map<ClusterId, number>();
+  for (const analysis of analyses) {
+    for (const theme of analysis.top_weaknesses) {
+      scores.set(theme, (scores.get(theme) ?? 0) + 3);
+    }
+    for (const blunder of analysis.blunders) {
+      const weight =
+        blunder.severity === "blunder"
+          ? 4
+          : blunder.severity === "mistake"
+            ? 2
+            : 1;
+      for (const theme of blunder.themes) {
+        scores.set(theme, (scores.get(theme) ?? 0) + weight);
+      }
+    }
+  }
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([theme, score]) => ({ theme, score }));
 }
 
 function MetricCard({

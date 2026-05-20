@@ -44,7 +44,7 @@ A chess web app where the marketing pitch isn't *"play chess online"* — it's *
 - [x] **Magic-link auth** via Supabase (email)
 - [x] **Game history** with per-game **replay viewer** — step buttons, keyboard nav (←/→/Home/End), click-to-jump on the move list
 - [x] **Auto-save** completed games (PGN + result + move count) to Postgres with row-level security
-- [x] **Visual post-game AI Coach** — Stockfish flags mistakes, shows red/green arrows for played/better moves, and adds optional Gemini explanations when `GEMINI_API_KEY` is configured
+- [x] **Persisted visual AI Coach** — Stockfish flags mistakes, shows red/green arrows for played/better moves, saves analysis + weak-spot tags, and adds optional Gemini explanations when `GEMINI_API_KEY` is configured
 - [x] **Dark / light theme** with a no-FOUC boot script, system / light / dark cycle, persisted
 - [x] **Mobile-first responsive** — playable on a phone in portrait
 - [x] **localStorage** persistence on every play surface — close the tab, come back, resume
@@ -123,6 +123,7 @@ npm install
 #   chess-app/supabase/schema.sql
 #   chess-app/supabase/migrations/0002_puzzle_attempts.sql
 #   chess-app/supabase/migrations/0003_user_theme_stats.sql
+#   chess-app/supabase/migrations/0004_game_analyses.sql
 
 npm run dev          # → http://localhost:3000
 npm run build        # production build
@@ -156,7 +157,7 @@ Low CAC channel: university CS clubs, BigTech-prep Discords, LeetCode Reddit. Th
 
 ## What I'd build next (if this were the day job)
 
-- **Game-to-profile AI Coach** — turn Stockfish blunders into persistent weak-spot tags, not just one-off game review.
+- **Sharper game-to-profile classification** — improve the current fork/pin/hanging-piece heuristics with richer tactical detection and more training tags.
 - **Multiplayer** — Supabase Realtime channel per game ID, share-by-link. No matchmaking, no chat — pure share-link play.
 - **Puzzle ingestion from Lichess** — the CC0 puzzle DB has 6M+ tagged positions. Curate themed packs from it.
 - **Spaced-repetition for puzzles you got wrong** — same loop as Anki. Pulls users back daily.

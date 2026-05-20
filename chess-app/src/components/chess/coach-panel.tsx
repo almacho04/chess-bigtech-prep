@@ -1,7 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StockfishEngine } from "@/lib/chess/engine";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  recordAnalysisWeaknesses,
+  saveGameAnalysis,
+  type GameAnalysisRow,
+} from "@/lib/supabase/game-analysis";
 import { Board, type BoardArrow } from "./board";
 import {
   analyzeGame,
@@ -13,13 +19,39 @@ import {
 type State =
   | { kind: "idle" }
   | { kind: "analyzing"; progress: AnalysisProgress }
-  | { kind: "done"; blunders: Blunder[] }
+  | {
+      kind: "done";
+      blunders: Blunder[];
+      analysis: GameAnalysisRow | null;
+      saved: boolean;
+      profiled: boolean;
+    }
   | { kind: "error"; message: string };
 
-export function CoachPanel({ pgn }: { pgn: string }) {
-  const [state, setState] = useState<State>({ kind: "idle" });
+export function CoachPanel({
+  pgn,
+  gameId,
+  initialAnalysis,
+}: {
+  pgn: string;
+  gameId?: string;
+  initialAnalysis?: GameAnalysisRow | null;
+}) {
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const [state, setState] = useState<State>(() =>
+    initialAnalysis
+      ? {
+          kind: "done",
+          blunders: initialAnalysis.blunders,
+          analysis: initialAnalysis,
+          saved: true,
+          profiled: true,
+        }
+      : { kind: "idle" },
+  );
   const engineRef = useRef<StockfishEngine | null>(null);
   const cancelRef = useRef(false);
+  const hasPersistedAnalysisRef = useRef(Boolean(initialAnalysis));
 
   useEffect(() => {
     return () => {
@@ -38,8 +70,9 @@ export function CoachPanel({ pgn }: { pgn: string }) {
       engineRef.current = engine;
       await engine.init();
       await engine.newGame(20);
+      const analysisDepth = 8;
       const blunders = await analyzeGame(engine, pgn, {
-        depth: 8,
+        depth: analysisDepth,
         onProgress: (p) =>
           setState((s) =>
             s.kind === "analyzing" ? { kind: "analyzing", progress: p } : s,
@@ -47,7 +80,34 @@ export function CoachPanel({ pgn }: { pgn: string }) {
         shouldCancel: () => cancelRef.current,
       });
       if (cancelRef.current) return;
-      setState({ kind: "done", blunders });
+
+      let savedAnalysis: GameAnalysisRow | null = null;
+      let profiled = false;
+      const shouldRecordProfile =
+        Boolean(gameId) && !hasPersistedAnalysisRef.current;
+      if (gameId) {
+        savedAnalysis = await saveGameAnalysis(supabase, {
+          game_id: gameId,
+          analysis_depth: analysisDepth,
+          blunders,
+        });
+        if (savedAnalysis) {
+          if (shouldRecordProfile) {
+            await recordAnalysisWeaknesses(supabase, blunders);
+            profiled = true;
+          }
+          hasPersistedAnalysisRef.current = true;
+        }
+      }
+
+      if (cancelRef.current) return;
+      setState({
+        kind: "done",
+        blunders,
+        analysis: savedAnalysis,
+        saved: Boolean(savedAnalysis),
+        profiled,
+      });
     } catch (err) {
       if (cancelRef.current) return;
       setState({
@@ -55,7 +115,7 @@ export function CoachPanel({ pgn }: { pgn: string }) {
         message: err instanceof Error ? err.message : "analysis failed",
       });
     }
-  }, [pgn]);
+  }, [gameId, pgn, supabase]);
 
   if (state.kind === "idle") {
     return (
@@ -130,10 +190,28 @@ export function CoachPanel({ pgn }: { pgn: string }) {
   return (
     <section className="mt-6 rounded-lg border border-foreground/10 p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/60">
-          AI Coach · {state.blunders.length} note
-          {state.blunders.length === 1 ? "" : "s"}
-        </h2>
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/60">
+            AI Coach · {state.blunders.length} note
+            {state.blunders.length === 1 ? "" : "s"}
+          </h2>
+          <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-foreground/55">
+            {state.saved ? (
+              <span className="rounded-full border border-emerald-500/25 bg-emerald-500/[0.06] px-2 py-0.5">
+                Saved to tutor memory
+              </span>
+            ) : gameId ? (
+              <span className="rounded-full border border-amber-500/25 bg-amber-500/[0.06] px-2 py-0.5">
+                Analysis not saved
+              </span>
+            ) : null}
+            {state.profiled ? (
+              <span className="rounded-full border border-sky-500/25 bg-sky-500/[0.06] px-2 py-0.5">
+                Weak spots updated
+              </span>
+            ) : null}
+          </div>
+        </div>
         <button
           type="button"
           onClick={onAnalyze}
@@ -148,6 +226,11 @@ export function CoachPanel({ pgn }: { pgn: string }) {
         </p>
       ) : (
         <>
+          {state.analysis?.summary ? (
+            <div className="mt-3 rounded-md border border-foreground/10 bg-foreground/[0.03] px-3 py-2 text-sm text-foreground/70">
+              {state.analysis.summary}
+            </div>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <LegendDot color="bg-red-500" label="played mistake" />
             <LegendDot color="bg-emerald-500" label="better move" />

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getGame } from "@/lib/supabase/games";
+import { getGameAnalysis } from "@/lib/supabase/game-analysis";
 import { CoachPanel } from "@/components/chess/coach-panel";
 import { ReplayViewer } from "@/components/chess/replay-viewer";
 import { SiteHeader } from "@/components/site/header";
@@ -22,7 +23,10 @@ export default async function GameReplayPage({
     redirect(`/?auth_required=history`);
   }
 
-  const game = await getGame(supabase, gameId);
+  const [game, analysis] = await Promise.all([
+    getGame(supabase, gameId),
+    getGameAnalysis(supabase, gameId),
+  ]);
   if (!game) {
     // RLS will mask other users' games as "not found", which is the right UX.
     notFound();
@@ -61,7 +65,11 @@ export default async function GameReplayPage({
           </div>
         </header>
         <ReplayViewer pgn={game.pgn} orientation={orientation} />
-        <CoachPanel pgn={game.pgn} />
+        <CoachPanel
+          pgn={game.pgn}
+          gameId={game.id}
+          initialAnalysis={analysis}
+        />
       </section>
     </main>
   );
