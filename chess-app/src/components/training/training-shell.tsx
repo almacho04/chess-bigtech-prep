@@ -1,16 +1,39 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   PUZZLES,
   getDailyPuzzle,
+  getPuzzleById,
   type Puzzle,
 } from "@/lib/training/puzzles";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { listDueToday } from "@/lib/supabase/puzzle-attempts";
 import { PuzzleSolver } from "./puzzle-solver";
 
 export function TrainingShell() {
   const daily = useMemo(() => getDailyPuzzle(), []);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const [dueIds, setDueIds] = useState<string[] | null>(null);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
+  // Fetch "due today" puzzles on mount; null = not yet loaded, [] = none due.
+  useEffect(() => {
+    let active = true;
+    listDueToday(supabase).then((ids) => {
+      if (active) setDueIds(ids);
+    });
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
+
+  const duePuzzles = useMemo<Puzzle[]>(() => {
+    if (!dueIds) return [];
+    return dueIds
+      .map((id) => getPuzzleById(id))
+      .filter((p): p is Puzzle => p !== undefined);
+  }, [dueIds]);
 
   const currentIndex = useMemo(
     () => PUZZLES.findIndex((p) => p.id === currentId),
@@ -57,6 +80,31 @@ export function TrainingShell() {
 
       <DailyCard puzzle={daily} onStart={() => setCurrentId(daily.id)} />
 
+      {duePuzzles.length > 0 ? (
+        <div className="mt-6">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground/60">
+            Due today
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+              {duePuzzles.length}
+            </span>
+          </h2>
+          <p className="mb-2 max-w-2xl text-xs text-foreground/55">
+            Puzzles you previously solved or missed are re-served on a
+            spaced-repetition schedule — same loop as Anki.
+          </p>
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {duePuzzles.map((p) => (
+              <PuzzleCard
+                key={p.id}
+                puzzle={p}
+                onStart={() => setCurrentId(p.id)}
+                accent
+              />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="mt-6">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-foreground/60">
           Pack — mates
@@ -99,16 +147,21 @@ function DailyCard({
 function PuzzleCard({
   puzzle,
   onStart,
+  accent = false,
 }: {
   puzzle: Puzzle;
   onStart: () => void;
+  accent?: boolean;
 }) {
+  const border = accent
+    ? "border-amber-500/40 hover:border-amber-500/70 hover:bg-amber-500/[0.04]"
+    : "border-foreground/10 hover:border-foreground/25 hover:bg-foreground/[0.03]";
   return (
     <li>
       <button
         type="button"
         onClick={onStart}
-        className="block w-full rounded-lg border border-foreground/10 p-4 text-left transition hover:border-foreground/25 hover:bg-foreground/[0.03]"
+        className={`block w-full rounded-lg border p-4 text-left transition ${border}`}
       >
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-sm font-semibold">{puzzle.title}</span>

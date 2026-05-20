@@ -8,6 +8,8 @@ import {
   legalTargetsFrom,
 } from "@/lib/chess/game";
 import type { Puzzle } from "@/lib/training/puzzles";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { recordAttempt } from "@/lib/supabase/puzzle-attempts";
 
 type Feedback = "idle" | "wrong" | "solved";
 
@@ -25,6 +27,12 @@ export function PuzzleSolver({
   const [attempts, setAttempts] = useState<number>(0);
   const [showHint, setShowHint] = useState<boolean>(false);
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+  // Only the FIRST outcome of a session counts toward the spaced-repetition
+  // schedule. Subsequent retries are practice but don't change the streak.
+  const [recordedOutcome, setRecordedOutcome] = useState<
+    "pass" | "fail" | null
+  >(null);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   // Reset state when the puzzle changes
   useEffect(() => {
@@ -34,7 +42,22 @@ export function PuzzleSolver({
     setAttempts(0);
     setShowHint(false);
     setSelectedSquare(null);
+    setRecordedOutcome(null);
   }, [puzzle]);
+
+  // Record the first outcome of each puzzle attempt into the SR schedule.
+  // Signed-out users no-op silently inside recordAttempt().
+  useEffect(() => {
+    if (recordedOutcome) return;
+    if (feedback === "wrong") {
+      void recordAttempt(supabase, puzzle.id, "fail");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRecordedOutcome("fail");
+    } else if (feedback === "solved") {
+      void recordAttempt(supabase, puzzle.id, "pass");
+      setRecordedOutcome("pass");
+    }
+  }, [feedback, puzzle.id, recordedOutcome, supabase]);
 
   // On a wrong attempt, briefly show the move then revert to the puzzle start.
   useEffect(() => {
