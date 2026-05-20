@@ -15,8 +15,21 @@ import {
   getAttemptDates,
   listDueToday,
 } from "@/lib/supabase/puzzle-attempts";
+import {
+  listThemeStats,
+  summarizeThemeStat,
+  totalTutorXp,
+  type ThemeStatRow,
+  type ThemeStatSummary,
+} from "@/lib/supabase/theme-stats";
 import { PuzzleSolver } from "./puzzle-solver";
 import { StreakBadge, StreakBanner } from "./streak-badge";
+
+const STARTER_RECOMMENDATIONS: readonly ClusterId[] = [
+  "fork",
+  "hangingPiece",
+  "mateIn2",
+];
 
 export function TrainingShell() {
   const daily = useMemo(() => getDailyPuzzle(), []);
@@ -25,20 +38,37 @@ export function TrainingShell() {
     useState<ClusterId | null>(null);
   const [dueIds, setDueIds] = useState<string[] | null>(null);
   const [streak, setStreak] = useState<StreakInfo | null>(null);
+  const [themeStats, setThemeStats] = useState<ThemeStatRow[]>([]);
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   // Fetch SR + streak data on mount (and after each puzzle attempt by remount).
   useEffect(() => {
     let active = true;
-    listDueToday(supabase).then((ids) => {
-      if (active) setDueIds(ids);
-    });
-    getAttemptDates(supabase, 60).then((dates) => {
-      if (active) setStreak(computeStreak(dates));
+    Promise.all([
+      listDueToday(supabase),
+      getAttemptDates(supabase, 60),
+      listThemeStats(supabase),
+    ]).then(([ids, dates, stats]) => {
+      if (!active) return;
+      setDueIds(ids);
+      setStreak(computeStreak(dates));
+      setThemeStats(stats);
     });
     return () => {
       active = false;
     };
+  }, [supabase]);
+
+  const refreshTutorData = useCallback(() => {
+    void Promise.all([
+      listDueToday(supabase),
+      getAttemptDates(supabase, 60),
+      listThemeStats(supabase),
+    ]).then(([ids, dates, stats]) => {
+      setDueIds(ids);
+      setStreak(computeStreak(dates));
+      setThemeStats(stats);
+    });
   }, [supabase]);
 
   const duePuzzles = useMemo<Puzzle[]>(() => {
@@ -47,6 +77,36 @@ export function TrainingShell() {
       .map((id) => getPuzzleById(id))
       .filter((p): p is Puzzle => p !== undefined);
   }, [dueIds]);
+
+  const statSummaries = useMemo(
+    () => themeStats.map(summarizeThemeStat),
+    [themeStats],
+  );
+
+  const recommendations = useMemo(() => {
+    const byTheme = new Map<ClusterId, ThemeStatSummary>();
+    for (const stat of statSummaries) byTheme.set(stat.theme, stat);
+
+    const rankedWeak = [...statSummaries]
+      .filter((s) => s.attempts > 0)
+      .sort((a, b) => b.weaknessScore - a.weaknessScore)
+      .map((s) => s.theme);
+
+    const seen = new Set<ClusterId>();
+    const ordered: ClusterId[] = [];
+    for (const id of [...rankedWeak, ...STARTER_RECOMMENDATIONS]) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      ordered.push(id);
+    }
+
+    return ordered.slice(0, 3).map((id) => ({
+      id,
+      stat: byTheme.get(id) ?? null,
+    }));
+  }, [statSummaries]);
+
+  const tutorXp = useMemo(() => totalTutorXp(themeStats), [themeStats]);
 
   // Puzzle currently being solved, if any.
   const current = currentId ? getPuzzleById(currentId) : null;
@@ -85,7 +145,12 @@ export function TrainingShell() {
               : "All training"}
           </button>
         </div>
-        <PuzzleSolver puzzle={current} onNext={onNext} hasNext={hasNext} />
+        <PuzzleSolver
+          puzzle={current}
+          onNext={onNext}
+          hasNext={hasNext}
+          onAttemptRecorded={refreshTutorData}
+        />
       </div>
     );
   }
@@ -149,12 +214,31 @@ export function TrainingShell() {
             and a spaced-repetition queue for the ones you got wrong.
           </p>
         </div>
-        <StreakBadge streak={streak} />
+        <div className="flex flex-wrap items-center gap-2">
+          <TutorXpBadge xp={tutorXp} />
+          <StreakBadge streak={streak} />
+        </div>
       </div>
 
       <StreakBanner streak={streak} />
 
       <DailyCard puzzle={daily} onStart={() => setCurrentId(daily.id)} />
+
+      <div className="mt-6">
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-foreground/60">
+          Recommended by your tutor
+        </h2>
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {recommendations.map(({ id, stat }) => (
+            <RecommendationCard
+              key={id}
+              theme={id}
+              stat={stat}
+              onStart={() => setCurrentClusterId(id)}
+            />
+          ))}
+        </ul>
+      </div>
 
       {duePuzzles.length > 0 ? (
         <div className="mt-6">
@@ -220,6 +304,61 @@ export function TrainingShell() {
         </ul>
       </div>
     </section>
+  );
+}
+
+function TutorXpBadge({ xp }: { xp: number }) {
+  const level = Math.floor(xp / 100) + 1;
+  return (
+    <div
+      title={`${xp} tutor XP`}
+      className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-200"
+    >
+      Level {level} · {xp} XP
+    </div>
+  );
+}
+
+function RecommendationCard({
+  theme,
+  stat,
+  onStart,
+}: {
+  theme: ClusterId;
+  stat: ThemeStatSummary | null;
+  onStart: () => void;
+}) {
+  const cluster = getCluster(theme);
+  const hasData = stat && stat.attempts > 0;
+  const detail = hasData
+    ? `${Math.round(stat.accuracy * 100)}% accuracy · ${stat.failures} miss${
+        stat.failures === 1 ? "" : "es"
+      }`
+    : "Starter diagnostic";
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onStart}
+        className="block h-full w-full rounded-lg border border-sky-500/25 bg-sky-500/[0.04] p-4 text-left transition hover:border-sky-500/50 hover:bg-sky-500/[0.08]"
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold">
+            <span aria-hidden>{cluster.icon}</span> {cluster.label}
+          </span>
+          <span className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-300">
+            focus
+          </span>
+        </div>
+        <div className="mt-1 text-xs text-foreground/60">{detail}</div>
+        <div className="mt-2 text-[11px] text-foreground/45">
+          {hasData
+            ? "The tutor will keep this in rotation until it improves."
+            : "First we measure this skill, then personalize the queue."}
+        </div>
+      </button>
+    </li>
   );
 }
 

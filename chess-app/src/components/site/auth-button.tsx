@@ -103,6 +103,13 @@ export function AuthButton() {
         {open ? (
           <div className="absolute right-0 z-40 mt-2 w-44 rounded-md border border-foreground/15 bg-background p-1 shadow-xl">
             <Link
+              href="/coach"
+              onClick={() => setOpen(false)}
+              className="block rounded px-3 py-1.5 text-sm hover:bg-foreground/5"
+            >
+              Tutor profile
+            </Link>
+            <Link
               href="/history"
               onClick={() => setOpen(false)}
               className="block rounded px-3 py-1.5 text-sm hover:bg-foreground/5"

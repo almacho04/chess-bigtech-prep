@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { applyOutcome, nextReviewAt } from "@/lib/training/sm2";
+import type { ClusterId } from "@/lib/training/clusters";
+import { recordThemeAttempt } from "./theme-stats";
 
 export type AttemptOutcome = "pass" | "fail";
 
@@ -20,6 +22,7 @@ export async function recordAttempt(
   supabase: SupabaseClient,
   puzzleId: string,
   outcome: AttemptOutcome,
+  theme?: ClusterId,
 ): Promise<PuzzleAttemptRow | null> {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
@@ -57,6 +60,11 @@ export async function recordAttempt(
     console.error("[recordAttempt] upsert failed", error);
     return null;
   }
+
+  if (theme) {
+    await recordThemeAttempt(supabase, theme, outcome);
+  }
+
   return data as PuzzleAttemptRow;
 }
 

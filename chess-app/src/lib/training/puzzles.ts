@@ -143,7 +143,6 @@ const LICHESS_PUZZLES: readonly RawLichess[] = [
   { id: "lichess-002Q2", startFen: "7k/p4R1p/3p3r/2pN1n2/2PbBBb1/3P2P1/P3r3/5R1K w - - 1 28", moves: "f4h6 f5g3", rating: 925, cluster: "mateIn1" },
   { id: "lichess-001rZ", startFen: "2kr1b1r/p1p2pp1/2pqb3/7p/3N2n1/2NPB3/PPP2PPP/R2Q1RK1 w - - 2 13", moves: "d4e6 d6h2", rating: 523, cluster: "mateIn1" },
   { id: "lichess-004JD", startFen: "3r4/R7/2p5/p1P2p2/1p4k1/nP6/P2KNP2/8 w - - 3 41", moves: "d2e3 a3c2", rating: 1297, cluster: "mateIn1" },
-  { id: "lichess-004WZ", startFen: "r6k/1b3pp1/p1q1pn1p/2p5/P1B5/1PN4Q/2r5/3R4 w - - 2 26", moves: "f1g1 c6h1", rating: 912, cluster: "mateIn1" },
   { id: "lichess-004iZ", startFen: "r2r2k1/2q1bpp1/3p1n1p/1ppN4/1P1BP3/P5Q1/PPP3PP/R5K1 b - - 1 20", moves: "f6d5 g3g7", rating: 449, cluster: "mateIn1" },
   { id: "lichess-004yJ", startFen: "r4rk1/1bp2ppp/p1q1pn2/2P5/8/3B1N2/P1P1QPPP/R4RK1 w - - 0 16", moves: "f3e5 c6g2", rating: 926, cluster: "mateIn1" },
   { id: "lichess-005Ep", startFen: "5kr1/ppR3p1/3R3p/8/1r1n4/8/1P3PPP/2K5 b - - 4 31", moves: "d4b5 d6d8", rating: 739, cluster: "mateIn1" },

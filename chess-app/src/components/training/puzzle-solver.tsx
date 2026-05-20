@@ -20,10 +20,12 @@ export function PuzzleSolver({
   puzzle,
   onNext,
   hasNext,
+  onAttemptRecorded,
 }: {
   puzzle: Puzzle;
   onNext?: () => void;
   hasNext?: boolean;
+  onAttemptRecorded?: () => void;
 }) {
   // `stepStartFen` is the position at which the user is expected to make their
   // move for the current step. Wrong attempts revert to it (not all the way to
@@ -60,15 +62,23 @@ export function PuzzleSolver({
   // Record the FIRST outcome of each puzzle attempt into the SR schedule.
   useEffect(() => {
     if (recordedOutcome) return;
-    if (feedback === "wrong") {
-      void recordAttempt(supabase, puzzle.id, "fail");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setRecordedOutcome("fail");
-    } else if (feedback === "solved") {
-      void recordAttempt(supabase, puzzle.id, "pass");
-      setRecordedOutcome("pass");
-    }
-  }, [feedback, puzzle.id, recordedOutcome, supabase]);
+    const outcome =
+      feedback === "wrong" ? "fail" : feedback === "solved" ? "pass" : null;
+    if (!outcome) return;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRecordedOutcome(outcome);
+    void recordAttempt(supabase, puzzle.id, outcome, puzzle.cluster).then(() =>
+      onAttemptRecorded?.(),
+    );
+  }, [
+    feedback,
+    onAttemptRecorded,
+    puzzle.cluster,
+    puzzle.id,
+    recordedOutcome,
+    supabase,
+  ]);
 
   // On a wrong attempt, briefly show the move then revert to the step-start FEN.
   useEffect(() => {

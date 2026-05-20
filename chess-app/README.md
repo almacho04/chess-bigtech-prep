@@ -17,6 +17,12 @@ npm run lint
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your anon JWT>
+# Optional, enables natural-language coach explanations:
+GEMINI_API_KEY=<server-side Gemini key>
 ```
 
-Then run [`supabase/schema.sql`](supabase/schema.sql) in your Supabase SQL Editor once.
+Then run these SQL files in your Supabase SQL Editor:
+
+1. [`supabase/schema.sql`](supabase/schema.sql)
+2. [`supabase/migrations/0002_puzzle_attempts.sql`](supabase/migrations/0002_puzzle_attempts.sql)
+3. [`supabase/migrations/0003_user_theme_stats.sql`](supabase/migrations/0003_user_theme_stats.sql)

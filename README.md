@@ -1,6 +1,6 @@
-# chess·prep — Chess for BigTech interview prep
+# chess·prep — Personal AI chess tutor
 
-> A modern chess platform with a sharper angle: practice the same kind of **calculation under pressure** that shows up in BigTech onsites.
+> An AI chess tutor that remembers your puzzle results, finds weak spots, and turns them into personalized training missions.
 
 **🟢 Live:** **https://chess-bigtech-prep.vercel.app**
 **📦 Repo:** https://github.com/almacho04/chess-bigtech-prep
@@ -10,8 +10,9 @@
 
 ## What this is
 
-A chess web app where the marketing pitch isn't *"play chess online"* — it's *"sharpen the pattern recognition and calculation that will help you land a FAANG offer."* That angle drives every feature decision:
+A chess web app where the marketing pitch isn't *"play chess online"* — it's *"train with a tutor that understands your actual mistakes."* The BigTech-prep angle still shapes the tone: pattern recognition, calculation under pressure, and short focused drills.
 
+- **`/coach`** — personal tutor dashboard with level, XP, strongest themes, weakest themes, and today's mission.
 - **`/training`** — daily mate-in-1 puzzle + a curated pack of tactical patterns, framed as "find the move that ends the game **now**, not three moves from now." Same problem-decomposition skill as a hard LeetCode under a 25-minute timer.
 - **`/play/ai`** — full-strength **Stockfish** opponent with 4 difficulty levels (Skill 0 → 20), runs entirely in your browser via Web Worker.
 - **`/play/local`** — pass-and-play two-player on one device, full rules.
@@ -26,8 +27,9 @@ A chess web app where the marketing pitch isn't *"play chess online"* — it's *
 ## Try it in 30 seconds
 
 1. Open **https://chess-bigtech-prep.vercel.app**
-2. Click **"Start training"** — solve today's puzzle. Drag a piece, or click-then-click.
-3. Try **"Play vs AI"** at *Medium* — Stockfish responds in 1–2 s. Switch theme top-right. Sign in with an email (magic link) to save your games.
+2. Click **"Start training"** — solve a few puzzles. Drag a piece, or click-then-click.
+3. Sign in with an email magic link, then open **"AI tutor"** to see your weak/strong spots.
+4. Try **"Play vs AI"** at *Medium* — Stockfish responds in 1–2 s. Switch theme top-right.
 
 ---
 
@@ -37,15 +39,18 @@ A chess web app where the marketing pitch isn't *"play chess online"* — it's *
 - [x] Full chess rules — castling, en passant, promotion (with **piece picker modal**), check / mate / stalemate / draw detection (`chess.js`)
 - [x] **Stockfish AI** opponent at 4 difficulties, runs in a Web Worker (no server cost, no API key)
 - [x] **`/training` mode** — daily puzzle + mate-in-1 pack, interactive solver with hints
+- [x] **Personal tutor profile** at `/coach` — theme strengths, weak spots, XP, level, and daily mission
+- [x] **Persistent theme stats** — puzzle results update `user_theme_stats` so training can adapt
 - [x] **Magic-link auth** via Supabase (email)
 - [x] **Game history** with per-game **replay viewer** — step buttons, keyboard nav (←/→/Home/End), click-to-jump on the move list
 - [x] **Auto-save** completed games (PGN + result + move count) to Postgres with row-level security
+- [x] **Post-game AI Coach prototype** — Stockfish flags mistakes; optional Gemini explanations when `GEMINI_API_KEY` is configured
 - [x] **Dark / light theme** with a no-FOUC boot script, system / light / dark cycle, persisted
 - [x] **Mobile-first responsive** — playable on a phone in portrait
 - [x] **localStorage** persistence on every play surface — close the tab, come back, resume
 
 ### On the roadmap
-- [ ] **Post-game AI Coach** — Stockfish flags blunders; Claude API explains them in plain language ("here you walked into a fork — better was …")
+- [ ] **Deeper game-to-weakness classification** — convert real-game blunders into tags like fork, hanging piece, opening, endgame
 - [ ] **Multiplayer** via shareable link (Supabase Realtime channel)
 - [ ] **Pro tier (Stripe)** — unlimited AI Coach analyses, custom piece skins, advanced puzzle packs
 - [ ] **City-based leaderboards** ("Top players from Almaty")
@@ -77,6 +82,7 @@ chess-app/
 ├── src/
 │   ├── app/                 ← App-Router routes
 │   │   ├── page.tsx                 (landing)
+│   │   ├── coach/page.tsx           (personal tutor profile)
 │   │   ├── training/page.tsx        (the niche)
 │   │   ├── play/{local,ai}/page.tsx
 │   │   ├── history/page.tsx + [gameId]/page.tsx
@@ -92,7 +98,7 @@ chess-app/
 │   │   ├── storage/         (localStorage persistence)
 │   │   └── training/        (puzzles, daily picker)
 │   └── middleware.ts        (Supabase session refresh)
-└── supabase/schema.sql      (tables + RLS + auto-profile trigger)
+└── supabase/                (schema + migrations with RLS)
 ```
 
 **Boundaries we keep clean:**
@@ -113,7 +119,10 @@ npm install
 # Create chess-app/.env.local with:
 #   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
-# Then run the SQL at chess-app/supabase/schema.sql in your Supabase SQL Editor.
+# Then run these SQL files in your Supabase SQL Editor:
+#   chess-app/supabase/schema.sql
+#   chess-app/supabase/migrations/0002_puzzle_attempts.sql
+#   chess-app/supabase/migrations/0003_user_theme_stats.sql
 
 npm run dev          # → http://localhost:3000
 npm run build        # production build
@@ -147,7 +156,7 @@ Low CAC channel: university CS clubs, BigTech-prep Discords, LeetCode Reddit. Th
 
 ## What I'd build next (if this were the day job)
 
-- **AI Coach (Claude API)** — biggest delta to user value. Post-game review that doesn't just say "this was a blunder, eval -3.4," but explains the *pattern* the player missed.
+- **Game-to-profile AI Coach** — turn Stockfish blunders into persistent weak-spot tags, not just one-off game review.
 - **Multiplayer** — Supabase Realtime channel per game ID, share-by-link. No matchmaking, no chat — pure share-link play.
 - **Puzzle ingestion from Lichess** — the CC0 puzzle DB has 6M+ tagged positions. Curate themed packs from it.
 - **Spaced-repetition for puzzles you got wrong** — same loop as Anki. Pulls users back daily.

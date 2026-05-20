@@ -26,6 +26,7 @@
 
 *Most recent first. Append a new dated bullet whenever work meaningfully advances or pivots. 1–3 lines per entry.*
 
+- `2026-05-20` — **Personal Tutor v1 shipped locally.** Added persistent `user_theme_stats` Supabase migration, puzzle-result theme tracking, `/coach` tutor dashboard (level, XP, weak spots, strong spots, mission), and personalized training recommendations. Product positioning shifted from generic BigTech chess app to "AI chess tutor that remembers weak spots." **Manual deploy step:** run `chess-app/supabase/migrations/0003_user_theme_stats.sql` in Supabase before relying on tutor stats in production.
 - `2026-05-19` — **🚀 Submission-ready.** All three deliverables present: live URL (https://chess-bigtech-prep.vercel.app), public GitHub repo, README at repo root with niche pitch + monetization story. Tiers 1–3 fully shipped; Tier 4 niche differentiator (`/training`) shipped; multiplayer / AI Coach / Stripe deferred and listed as "what's next" in the README. User chose to submit now rather than push for multiplayer.
 - `2026-05-19` — **Tier 4a shipped — `/training` mode, the niche differentiator.** Curated mate-in-1 puzzles ([`src/lib/training/puzzles.ts`](chess-app/src/lib/training/puzzles.ts)) framed as interview-style calculation drills. Deterministic daily puzzle rotation. PuzzleSolver client component validates by checking `isCheckmate()` after the user's move — accepts any move that mates. Wrong moves animate briefly then snap back. Landing page CTAs reordered so "Start training" is the primary action. **Next:** README, then multiplayer if time.
 - `2026-05-19` — **Tier 3 fully live in production.** User completed: SQL migration in Supabase, Site/Redirect URLs configured, env vars added in Vercel + redeploy. Production smoke test confirms: `/`, `/play/ai`, `/play/local` → 200; `/history` → 307 redirect for unauthed users; `/auth/callback` rejects bad codes. **Next:** Tier 4 (Great) — `/training` mode (the niche differentiator) + AI Coach + multiplayer + README polish.
@@ -51,7 +52,7 @@
 | AI opponent | **`stockfish.js`** (WASM, in-browser) | Zero server cost; selectable strength via depth |
 | Auth + DB | **Supabase** (Postgres + Auth + Realtime + RLS) | One service covers auth, DB, and multiplayer |
 | Multiplayer transport | **Supabase Realtime** channels | No custom WebSocket server to operate |
-| AI Coach | **Anthropic Claude API** + Stockfish eval | Natural-language commentary on blunders |
+| AI Coach | **Stockfish eval + Gemini route** | Natural-language commentary on blunders with deterministic fallback |
 | Payments | **Stripe Checkout** | Pro tier + cosmetic skins |
 | Hosting | **Vercel** | Zero-config Next.js + preview deploys per PR |
 | Observability | **Vercel Analytics** + **Sentry** | Minimal setup, sufficient for an MVP |
@@ -96,8 +97,9 @@
 
 ### Tier 4 — Great  *(the "wow")*
 - [x] **BigTech interview prep angle:** `/training` mode with curated mate-in-1 puzzle pack and daily rotation
+- [x] **Personal Tutor v1:** `/coach` dashboard + persistent theme stats + recommended training focus
 - [ ] **Multiplayer** via shareable link (Supabase Realtime channel keyed by game ID) — *if time*
-- [ ] **Post-game AI Coach:** Stockfish flags blunders → Claude API plain-language coaching — *deferred, no Anthropic key*
+- [x] **Post-game AI Coach prototype:** Stockfish flags mistakes; Gemini explanations if `GEMINI_API_KEY` is configured
 - [ ] City-based leaderboard — *deferred*
 - [ ] Stripe Pro tier — *deferred*
 - [x] README at the repo root with niche pitch, architecture diagram, monetization story, what's-next roadmap
@@ -162,7 +164,7 @@
 - `lib/chess/` — pure rules / eval helpers, no React imports
 - `lib/supabase/` — server-side + client-side factories, typed
 - `lib/stockfish/` — Web Worker wrapper, lazy-loaded
-- `lib/coach/` — Stockfish-eval-driven blunder detection + Claude API client (server-only)
+- `lib/coach/` — Stockfish-eval-driven blunder detection + Gemini explanation route (server-only)
 - `components/board/` — board, pieces, animations
 - `components/coach/` — post-game review UI
 - `components/ui/` — shadcn primitives
