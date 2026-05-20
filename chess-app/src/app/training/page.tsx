@@ -1,6 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site/header";
 import { TrainingShell } from "@/components/training/training-shell";
+
+export const metadata: Metadata = {
+  title: "Training",
+  description:
+    "Themed tactical puzzles — forks, pins, hanging pieces, mates — with spaced repetition and daily streaks.",
+};
 
 export default function TrainingPage() {
   return (

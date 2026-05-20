@@ -52,6 +52,10 @@ export type AnalyzeOptions = {
   blunderCp?: number;
   /** Skip the first N plies (opening theory is rarely a blunder source). */
   skipOpeningPlies?: number;
+  /** Analyze one side only when the game has a known human player. */
+  sideToAnalyze?: "w" | "b" | "both";
+  /** Ask Stockfish for visual best-move arrows only on the worst N mistakes. */
+  maxBestMoveAnnotations?: number;
   /** Called with progress updates while analyzing. */
   onProgress?: (p: AnalysisProgress) => void;
   /** Read this on each tick — return true to stop early. */
@@ -64,6 +68,8 @@ const DEFAULTS = {
   mistakeCp: 100,
   blunderCp: 200,
   skipOpeningPlies: 4,
+  sideToAnalyze: "both",
+  maxBestMoveAnnotations: 5,
 } as const;
 
 function classify(
@@ -110,22 +116,43 @@ export async function analyzeGame(
     fens.push(replayer.fen());
   }
 
-  // Evaluate each position. Total = moves + 1 (before + after each ply).
-  const total = fens.length;
-  const evals: number[] = new Array(total).fill(0);
-  for (let i = 0; i < total; i++) {
+  const moveIndexes = moves
+    .map((m, i) => ({ move: m, index: i }))
+    .filter(
+      ({ move, index }) =>
+        index >= config.skipOpeningPlies &&
+        (config.sideToAnalyze === "both" ||
+          move.color === config.sideToAnalyze),
+    )
+    .map(({ index }) => index);
+
+  if (moveIndexes.length === 0) {
+    config.onProgress?.({ done: 1, total: 1 });
+    return [];
+  }
+
+  // Evaluate only positions needed to judge the selected side's moves.
+  const neededEvalIndexes = new Set<number>();
+  for (const index of moveIndexes) {
+    neededEvalIndexes.add(index);
+    neededEvalIndexes.add(index + 1);
+  }
+  const evalIndexes = [...neededEvalIndexes].sort((a, b) => a - b);
+  const evals: number[] = new Array(fens.length).fill(Number.NaN);
+  for (let n = 0; n < evalIndexes.length; n++) {
     if (config.shouldCancel?.()) return [];
-    evals[i] = await engine.evaluate(fens[i], config.depth);
-    config.onProgress?.({ done: i + 1, total });
+    const fenIndex = evalIndexes[n];
+    evals[fenIndex] = await engine.evaluate(fens[fenIndex], config.depth);
+    config.onProgress?.({ done: n + 1, total: evalIndexes.length });
   }
 
   // Detect drops.
   const blunders: Blunder[] = [];
-  for (let i = 0; i < moves.length; i++) {
-    if (i < config.skipOpeningPlies) continue;
+  for (const i of moveIndexes) {
     const m = moves[i];
     const before = evals[i];
     const after = evals[i + 1];
+    if (!Number.isFinite(before) || !Number.isFinite(after)) continue;
     // Eval is from white's POV. Drop for the side that just moved:
     //   white moves: drop = before - after
     //   black moves: drop = after - before
@@ -154,23 +181,46 @@ export async function analyzeGame(
     });
   }
 
+  const annotatedPlySet = new Set(
+    [...blunders]
+      .sort(
+        (a, b) =>
+          severityRank(b.severity) - severityRank(a.severity) ||
+          b.evalDropCp - a.evalDropCp,
+      )
+      .slice(0, config.maxBestMoveAnnotations)
+      .map((b) => b.ply),
+  );
+  let progressDone = evalIndexes.length;
+  const progressTotal = evalIndexes.length + annotatedPlySet.size;
+
   for (const b of blunders) {
     if (config.shouldCancel?.()) return [];
-    const best = await engine.bestMove(
-      b.fenBefore,
-      coachDifficulty(config.depth),
-    );
-    if (best) {
-      const san = sanForMove(b.fenBefore, best.from, best.to, best.promotion);
-      b.bestMoveSan = san;
-      b.bestMoveUci = `${best.from}${best.to}${best.promotion ?? ""}`;
-      b.bestMoveFrom = best.from;
-      b.bestMoveTo = best.to;
+    if (annotatedPlySet.has(b.ply)) {
+      const best = await engine.bestMove(
+        b.fenBefore,
+        coachDifficulty(config.depth),
+      );
+      if (best) {
+        const san = sanForMove(b.fenBefore, best.from, best.to, best.promotion);
+        b.bestMoveSan = san;
+        b.bestMoveUci = `${best.from}${best.to}${best.promotion ?? ""}`;
+        b.bestMoveFrom = best.from;
+        b.bestMoveTo = best.to;
+      }
+      progressDone += 1;
+      config.onProgress?.({ done: progressDone, total: progressTotal });
     }
     b.themes = classifyBlunderThemes(b);
   }
 
   return blunders;
+}
+
+function severityRank(severity: Severity): number {
+  if (severity === "blunder") return 3;
+  if (severity === "mistake") return 2;
+  return 1;
 }
 
 function classifyBlunderThemes(blunder: Blunder): ClusterId[] {

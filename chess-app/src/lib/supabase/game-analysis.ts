@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClusterId } from "@/lib/training/clusters";
 import type { Blunder, Severity } from "@/lib/coach/analyze";
-import { recordThemeAttempt } from "./theme-stats";
+import {
+  scoreWeaknessesFrom,
+  topWeaknessesFrom,
+} from "@/lib/coach/weakness-scoring";
+import { recordThemeGameSignal } from "./theme-stats";
 
 export type GameAnalysisRow = {
   id: string;
@@ -110,28 +114,13 @@ export async function recordAnalysisWeaknesses(
   supabase: SupabaseClient,
   blunders: readonly Blunder[],
 ): Promise<void> {
-  const themes = topWeaknessesFrom(blunders, 3);
-  for (const theme of themes) {
-    await recordThemeAttempt(supabase, theme, "fail");
+  const themes = scoreWeaknessesFrom(blunders, 3);
+  for (const { theme, score } of themes) {
+    await recordThemeGameSignal(supabase, theme, score);
   }
 }
 
-export function topWeaknessesFrom(
-  blunders: readonly Pick<Blunder, "themes" | "severity">[],
-  limit = 3,
-): ClusterId[] {
-  const scores = new Map<ClusterId, number>();
-  for (const b of blunders) {
-    const weight = severityWeight(b.severity);
-    for (const theme of b.themes) {
-      scores.set(theme, (scores.get(theme) ?? 0) + weight);
-    }
-  }
-  return [...scores.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([theme]) => theme);
-}
+export { scoreWeaknessesFrom, topWeaknessesFrom };
 
 export function buildAnalysisSummary(blunders: readonly Blunder[]): string {
   if (blunders.length === 0) {
@@ -147,8 +136,8 @@ export function buildAnalysisSummary(blunders: readonly Blunder[]): string {
 
   return [
     `Stockfish found ${counts.blunder} blunder${counts.blunder === 1 ? "" : "s"}, ${counts.mistake} mistake${counts.mistake === 1 ? "" : "s"}, and ${counts.inaccuracy} inaccuracy${counts.inaccuracy === 1 ? "" : "ies"}.`,
-    `The main tutor focus from this game is: ${themeText}.`,
-    "Those themes now feed your dashboard and training recommendations.",
+    `The likely tutor focus from this game is: ${themeText}.`,
+    "Those real-game themes are saved separately from puzzle accuracy and still feed training recommendations.",
   ].join(" ");
 }
 
@@ -160,12 +149,6 @@ function countBySeverity(blunders: readonly Pick<Blunder, "severity">[]) {
   };
   for (const b of blunders) counts[b.severity] += 1;
   return counts;
-}
-
-function severityWeight(severity: Severity): number {
-  if (severity === "blunder") return 4;
-  if (severity === "mistake") return 2;
-  return 1;
 }
 
 function normalizeRow(row: GameAnalysisRow): GameAnalysisRow {

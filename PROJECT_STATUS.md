@@ -26,6 +26,7 @@
 
 *Most recent first. Append a new dated bullet whenever work meaningfully advances or pivots. 1–3 lines per entry.*
 
+- `2026-05-20` — **Tutor memory hardening.** Added `0006_theme_signal_sources.sql` so puzzle accuracy and real-game weakness signals are stored separately through an atomic RPC. AI Coach now analyzes the human side, caches/reuses saved reviews, labels re-analysis as costly, and limits best-move arrows to the five biggest swings.
 - `2026-05-20` — **Tutor reliability fixes.** Added `0005_game_dedupe.sql` generated game fingerprints + unique index to stop duplicate saved games and clean existing exact duplicates. History defensively hides duplicates and prefers analyzed copies. `/coach` now keeps weak and strong spots mutually exclusive.
 - `2026-05-20` — **Personal Tutor v2 shipped locally.** Added `game_analyses` Supabase migration, persisted AI Coach reviews, heuristic real-game weak-spot tags (mate, fork, pin, hanging piece, calculation), first-analysis profile updates, and `/coach` real-game memory. **Manual deploy step:** run `chess-app/supabase/migrations/0004_game_analyses.sql` in Supabase.
 - `2026-05-20` — **Visual game analysis upgraded.** Replay board now highlights the active move with an arrow. AI Coach mistake cards render the pre-mistake position with a red arrow for the played mistake and a green arrow for Stockfish's suggested best move, plus played/better move badges. `npm run lint` + `npm run build` pass.

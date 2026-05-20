@@ -1,6 +1,7 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/site/header";
+import { UnauthPanel } from "@/components/site/unauth-panel";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listGames } from "@/lib/supabase/games";
 import {
@@ -17,6 +18,12 @@ import { getCluster, type ClusterId } from "@/lib/training/clusters";
 
 export const dynamic = "force-dynamic";
 
+export const metadata: Metadata = {
+  title: "AI tutor",
+  description:
+    "Your personal chess tutor profile — XP, weak spots, strong spots, and today's focus mission.",
+};
+
 const STARTER_FOCUS: readonly ClusterId[] = ["fork", "hangingPiece", "mateIn2"];
 
 export default async function CoachPage() {
@@ -25,7 +32,27 @@ export default async function CoachPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/?auth_required=coach");
+    return (
+      <main className="flex flex-1 flex-col">
+        <SiteHeader
+          rightContent={
+            <span>
+              <span className="text-foreground/40">mode:</span> AI tutor
+            </span>
+          }
+        />
+        <UnauthPanel
+          title="Open your tutor profile"
+          description="Sign in and the tutor will remember every puzzle you solve, surface your weakest themes, and pick today's focus for you."
+          benefits={[
+            "XP, level, and accuracy per tactical theme",
+            "Weak spots ranked by frequency and severity",
+            "Real-game memory from your analyzed Stockfish reviews",
+            "A daily mission that adapts as you improve",
+          ]}
+        />
+      </main>
+    );
   }
 
   const [themeRows, games, gameAnalyses] = await Promise.all([
@@ -40,18 +67,21 @@ export default async function CoachPage() {
   const totalXp = puzzleXp + gameXp;
   const level = Math.floor(totalXp / 100) + 1;
   const levelProgress = totalXp % 100;
-  const totalAttempts = stats.reduce((sum, s) => sum + s.attempts, 0);
-  const totalSuccesses = stats.reduce((sum, s) => sum + s.successes, 0);
+  const totalAttempts = stats.reduce((sum, s) => sum + s.puzzleAttempts, 0);
+  const totalSuccesses = stats.reduce((sum, s) => sum + s.puzzleSuccesses, 0);
   const overallAccuracy =
     totalAttempts === 0 ? null : Math.round((totalSuccesses / totalAttempts) * 100);
 
   const weakSpots = [...stats]
-    .filter((s) => s.attempts > 0 && (s.failures > 0 || s.accuracy < 0.65))
+    .filter(
+      (s) =>
+        s.puzzleAttempts > 0 && (s.puzzleFailures > 0 || s.accuracy < 0.65),
+    )
     .sort(
       (a, b) =>
-        b.weaknessScore - a.weaknessScore ||
+        b.puzzleWeaknessScore - a.puzzleWeaknessScore ||
         a.accuracy - b.accuracy ||
-        b.attempts - a.attempts,
+        b.puzzleAttempts - a.puzzleAttempts,
     )
     .slice(0, 3);
 
@@ -59,16 +89,16 @@ export default async function CoachPage() {
   const strongSpots = [...stats]
     .filter(
       (s) =>
-        s.attempts >= 2 &&
+        s.puzzleAttempts >= 2 &&
         s.accuracy >= 0.7 &&
-        s.successes > s.failures &&
+        s.puzzleSuccesses > s.puzzleFailures &&
         !weakThemes.has(s.theme),
     )
     .sort(
       (a, b) =>
         b.accuracy - a.accuracy ||
         b.best_streak - a.best_streak ||
-        b.attempts - a.attempts,
+        b.puzzleAttempts - a.puzzleAttempts,
     )
     .slice(0, 3);
 
@@ -116,7 +146,7 @@ export default async function CoachPage() {
           <MetricCard
             label="Puzzle accuracy"
             value={overallAccuracy === null ? "New" : `${overallAccuracy}%`}
-            detail={`${totalAttempts} tracked attempts`}
+            detail={`${totalAttempts} puzzle attempts`}
           />
           <MetricCard
             label="Saved games"
@@ -132,14 +162,14 @@ export default async function CoachPage() {
 
         <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
           <ThemePanel
-            title="Weak spots"
+            title="Puzzle weak spots"
             emptyTitle="No weak spots yet"
             emptyBody="Solve a few puzzles and the tutor will start ranking the themes that need attention."
             stats={weakSpots}
             tone="weak"
           />
           <ThemePanel
-            title="Strong spots"
+            title="Puzzle strong spots"
             emptyTitle="Strengths loading"
             emptyBody="Pass at least two puzzles in a theme and it can appear here as a strength."
             stats={strongSpots}
@@ -187,8 +217,11 @@ export default async function CoachPage() {
                           <span aria-hidden>{cluster.icon}</span>{" "}
                           {cluster.label}
                         </span>
-                        <span className="font-mono text-xs text-foreground/55">
-                          score {item.score}
+                        <span
+                          className="text-xs text-foreground/55"
+                          title={`Internal weakness score: ${item.score}`}
+                        >
+                          {gameSignalLabel(item.score)}
                         </span>
                       </li>
                     );
@@ -248,7 +281,7 @@ export default async function CoachPage() {
             <ul className="mt-3 flex flex-col gap-2 text-sm text-foreground/70">
               <li>Pass a puzzle: theme XP and streak go up.</li>
               <li>Miss a puzzle: that theme gets higher priority.</li>
-              <li>Analyze a game: mistakes are tagged and saved as memory.</li>
+              <li>Analyze a game: mistakes are tagged as separate real-game memory.</li>
             </ul>
           </section>
         </div>
@@ -297,6 +330,12 @@ function aggregateGameWeaknesses(
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
     .map(([theme, score]) => ({ theme, score }));
+}
+
+function gameSignalLabel(score: number): string {
+  if (score >= 20) return "very frequent";
+  if (score >= 8) return "repeated";
+  return "occasional";
 }
 
 function MetricCard({
@@ -376,7 +415,7 @@ function ThemeRow({
         <div className="font-mono text-sm">{pct}%</div>
       </div>
       <div className="mt-1 text-xs text-foreground/60">
-        {stat.successes}/{stat.attempts} passed · best streak{" "}
+        {stat.puzzleSuccesses}/{stat.puzzleAttempts} passed · best streak{" "}
         {stat.best_streak}
       </div>
     </li>

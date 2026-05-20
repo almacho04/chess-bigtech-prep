@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StockfishEngine } from "@/lib/chess/engine";
+import { getCluster } from "@/lib/training/clusters";
+import type { HumanColor } from "@/lib/supabase/games";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   recordAnalysisWeaknesses,
@@ -31,10 +33,12 @@ type State =
 export function CoachPanel({
   pgn,
   gameId,
+  humanColor,
   initialAnalysis,
 }: {
   pgn: string;
   gameId?: string;
+  humanColor?: HumanColor | null;
   initialAnalysis?: GameAnalysisRow | null;
 }) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
@@ -73,6 +77,8 @@ export function CoachPanel({
       const analysisDepth = 8;
       const blunders = await analyzeGame(engine, pgn, {
         depth: analysisDepth,
+        sideToAnalyze: humanColor ?? "both",
+        maxBestMoveAnnotations: 5,
         onProgress: (p) =>
           setState((s) =>
             s.kind === "analyzing" ? { kind: "analyzing", progress: p } : s,
@@ -115,7 +121,7 @@ export function CoachPanel({
         message: err instanceof Error ? err.message : "analysis failed",
       });
     }
-  }, [gameId, pgn, supabase]);
+    }, [gameId, humanColor, pgn, supabase]);
 
   if (state.kind === "idle") {
     return (
@@ -124,8 +130,9 @@ export function CoachPanel({
           AI Coach
         </h2>
         <p className="mt-1 text-sm text-foreground/70">
-          Run Stockfish over the game and flag every move that lost material
-          or position. Each flagged move gets a plain-language coaching note.
+          Run Stockfish over {humanColor ? "your moves" : "the game"} and flag
+          the moments that lost material or position. The worst notes get visual
+          best-move arrows and are saved for the tutor.
         </p>
         <button
           type="button"
@@ -159,8 +166,9 @@ export function CoachPanel({
           />
         </div>
         <p className="mt-2 text-xs text-foreground/55">
-          Stockfish is evaluating every position at depth 8. Depending on game
-          length this takes ~30 s. Stays in your browser.
+          Stockfish is evaluating {humanColor ? "your moves" : "both sides"} at
+          depth 8 and adding arrows to the five biggest swings. Cached reviews
+          load instantly next time.
         </p>
       </section>
     );
@@ -187,6 +195,9 @@ export function CoachPanel({
   }
 
   // state.kind === "done"
+  const reviewedAt = state.analysis?.analyzed_at
+    ? new Date(state.analysis.analyzed_at).toLocaleString()
+    : null;
   return (
     <section className="mt-6 rounded-lg border border-foreground/10 p-4">
       <div className="flex items-baseline justify-between gap-2">
@@ -198,7 +209,7 @@ export function CoachPanel({
           <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-foreground/55">
             {state.saved ? (
               <span className="rounded-full border border-emerald-500/25 bg-emerald-500/[0.06] px-2 py-0.5">
-                Saved to tutor memory
+                {reviewedAt ? `Cached ${reviewedAt}` : "Saved to tutor memory"}
               </span>
             ) : gameId ? (
               <span className="rounded-full border border-amber-500/25 bg-amber-500/[0.06] px-2 py-0.5">
@@ -215,9 +226,10 @@ export function CoachPanel({
         <button
           type="button"
           onClick={onAnalyze}
+          title="Runs Stockfish again and overwrites the cached review."
           className="text-xs text-foreground/60 hover:text-foreground"
         >
-          Re-analyze
+          Re-analyze (costly)
         </button>
       </div>
       {state.blunders.length === 0 ? (
@@ -234,6 +246,9 @@ export function CoachPanel({
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <LegendDot color="bg-red-500" label="played mistake" />
             <LegendDot color="bg-emerald-500" label="better move" />
+            <span className="rounded-full border border-foreground/10 px-2 py-1 text-foreground/60">
+              themes are likely estimates
+            </span>
           </div>
           <ul className="mt-3 flex flex-col gap-3">
             {state.blunders.map((b) => (
@@ -337,6 +352,23 @@ function BlunderRow({ blunder }: { blunder: Blunder }) {
               tone="good"
             />
           </div>
+
+          {blunder.themes.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {blunder.themes.map((theme) => {
+                const cluster = getCluster(theme);
+                return (
+                  <span
+                    key={theme}
+                    title="Likely theme estimated from Stockfish and the board pattern."
+                    className="rounded-full border border-foreground/10 bg-background/40 px-2 py-0.5 text-[11px] text-foreground/60"
+                  >
+                    <span aria-hidden>{cluster.icon}</span> {cluster.label}
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
 
           {response ? (
             <>

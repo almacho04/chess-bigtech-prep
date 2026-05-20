@@ -20,25 +20,48 @@ alter table public.games
   ) stored;
 
 -- Remove exact duplicate completed games before adding the unique index.
--- Prefer keeping a row that already has an analysis; otherwise keep the newest.
-with ranked as (
-  select
-    g.id,
-    row_number() over (
-      partition by g.user_id, g.game_hash
-      order by
-        case when ga.id is null then 0 else 1 end desc,
-        g.completed_at desc,
-        g.id desc
-    ) as rn
-  from public.games g
-  left join public.game_analyses ga on ga.game_id = g.id
-  where g.game_hash is not null
-)
-delete from public.games g
-using ranked r
-where g.id = r.id
-  and r.rn > 1;
+-- Prefer keeping a row that already has an analysis when 0004 is present;
+-- otherwise keep the newest. This conditional keeps the migration useful even
+-- if someone accidentally runs it before 0004.
+do $$
+begin
+  if to_regclass('public.game_analyses') is not null then
+    with ranked as (
+      select
+        g.id,
+        row_number() over (
+          partition by g.user_id, g.game_hash
+          order by
+            case when ga.id is null then 0 else 1 end desc,
+            g.completed_at desc,
+            g.id desc
+        ) as rn
+      from public.games g
+      left join public.game_analyses ga on ga.game_id = g.id
+      where g.game_hash is not null
+    )
+    delete from public.games g
+    using ranked r
+    where g.id = r.id
+      and r.rn > 1;
+  else
+    with ranked as (
+      select
+        g.id,
+        row_number() over (
+          partition by g.user_id, g.game_hash
+          order by g.completed_at desc, g.id desc
+        ) as rn
+      from public.games g
+      where g.game_hash is not null
+    )
+    delete from public.games g
+    using ranked r
+    where g.id = r.id
+      and r.rn > 1;
+  end if;
+end;
+$$;
 
 create unique index if not exists games_user_game_hash_unique
   on public.games (user_id, game_hash);

@@ -53,8 +53,8 @@ export async function saveGame(
     .single();
 
   if (error) {
-    console.error("[saveGame] upsert failed", error);
-    return null;
+    console.warn("[saveGame] hash upsert failed; trying legacy save", error);
+    return saveGameLegacy(supabase, userId, input);
   }
   return data as GameRow;
 }
@@ -65,18 +65,20 @@ export async function listGames(
   limit = 50,
   opts: { dedupe?: boolean } = {},
 ): Promise<GameRow[]> {
+  const queryLimit =
+    opts.dedupe === false ? limit : Math.min(Math.max(limit * 4, limit), 500);
   const { data, error } = await supabase
     .from("games")
     .select("*")
     .eq("user_id", userId)
     .order("completed_at", { ascending: false })
-    .limit(limit);
+    .limit(queryLimit);
   if (error) {
     console.error("[listGames] select failed", error);
     return [];
   }
   const rows = (data ?? []) as GameRow[];
-  return opts.dedupe === false ? rows : dedupeGames(rows);
+  return opts.dedupe === false ? rows : dedupeGames(rows).slice(0, limit);
 }
 
 export async function getGame(
@@ -119,4 +121,64 @@ export function dedupeGames(
     }
   }
   return [...byKey.values()];
+}
+
+async function saveGameLegacy(
+  supabase: SupabaseClient,
+  userId: string,
+  input: SaveGameInput,
+): Promise<GameRow | null> {
+  let existingQuery = supabase
+    .from("games")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("mode", input.mode)
+    .eq("result", input.result)
+    .eq("pgn", input.pgn);
+
+  if (input.opponent_difficulty) {
+    existingQuery = existingQuery.eq(
+      "opponent_difficulty",
+      input.opponent_difficulty,
+    );
+  } else {
+    existingQuery = existingQuery.is("opponent_difficulty", null);
+  }
+
+  if (input.human_color) {
+    existingQuery = existingQuery.eq("human_color", input.human_color);
+  } else {
+    existingQuery = existingQuery.is("human_color", null);
+  }
+
+  const { data: existing, error: existingError } = await existingQuery
+    .order("completed_at", { ascending: false })
+    .limit(1);
+
+  if (existingError) {
+    console.error("[saveGameLegacy] duplicate lookup failed", existingError);
+    return null;
+  }
+  if (existing?.[0]) return existing[0] as GameRow;
+
+  const { data, error } = await supabase
+    .from("games")
+    .insert({
+      user_id: userId,
+      mode: input.mode,
+      pgn: input.pgn,
+      result: input.result,
+      move_count: input.move_count,
+      opponent_difficulty: input.opponent_difficulty ?? null,
+      human_color: input.human_color ?? null,
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error("[saveGameLegacy] insert failed", error);
+    return null;
+  }
+
+  return data as GameRow;
 }

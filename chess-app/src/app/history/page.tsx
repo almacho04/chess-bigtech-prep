@@ -1,5 +1,5 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   dedupeGames,
@@ -8,8 +8,14 @@ import {
 } from "@/lib/supabase/games";
 import { listGameAnalyses } from "@/lib/supabase/game-analysis";
 import { SiteHeader } from "@/components/site/header";
+import { UnauthPanel } from "@/components/site/unauth-panel";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Game history",
+  description: "Every saved game, with replay and AI Coach analysis.",
+};
 
 export default async function HistoryPage() {
   const supabase = await createSupabaseServerClient();
@@ -17,7 +23,20 @@ export default async function HistoryPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/?auth_required=history");
+    return (
+      <main className="flex flex-1 flex-col">
+        <SiteHeader rightContent={<span>Game history</span>} />
+        <UnauthPanel
+          title="Your saved games live here"
+          description="Sign in and every completed game (local or vs AI) auto-saves with PGN, result, and move count — replay any one move-by-move."
+          benefits={[
+            "Full game replay with keyboard navigation",
+            "Click any move on the side panel to jump there",
+            "Run AI Coach on each game to surface blunders",
+          ]}
+        />
+      </main>
+    );
   }
 
   const [rawGames, analyses] = await Promise.all([

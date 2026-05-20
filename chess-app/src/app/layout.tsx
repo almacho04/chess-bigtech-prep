@@ -13,10 +13,54 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://chess-bigtech-prep.vercel.app";
+const ogTitle = "chess·prep — Personal AI chess tutor";
+const ogDescription =
+  "An AI chess tutor that remembers your puzzle results, finds weak spots, and turns them into focused training missions. Built for engineers prepping BigTech interviews.";
+
 export const metadata: Metadata = {
-  title: "chess·prep — Chess for BigTech interview prep",
-  description:
-    "A chess platform built for ambitious engineers. Play, train patterns, and sharpen the calculation skills that show up in BigTech interviews.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "chess·prep — Personal AI chess tutor",
+    template: "%s · chess·prep",
+  },
+  description: ogDescription,
+  applicationName: "chess·prep",
+  authors: [{ name: "almacho04" }],
+  keywords: [
+    "chess",
+    "chess tutor",
+    "ai chess",
+    "stockfish",
+    "puzzles",
+    "spaced repetition",
+    "leetcode",
+    "interview prep",
+    "next.js",
+    "supabase",
+  ],
+  openGraph: {
+    type: "website",
+    siteName: "chess·prep",
+    url: siteUrl,
+    title: ogTitle,
+    description: ogDescription,
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "chess·prep — Personal AI chess tutor landing page",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: ogTitle,
+    description: ogDescription,
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({

@@ -10,6 +10,7 @@ npm install
 npm run dev          # http://localhost:3000
 npm run build
 npm run lint
+npm test
 ```
 
 ## Required env vars (`chess-app/.env.local`)
@@ -28,3 +29,4 @@ Then run these SQL files in your Supabase SQL Editor:
 3. [`supabase/migrations/0003_user_theme_stats.sql`](supabase/migrations/0003_user_theme_stats.sql)
 4. [`supabase/migrations/0004_game_analyses.sql`](supabase/migrations/0004_game_analyses.sql)
 5. [`supabase/migrations/0005_game_dedupe.sql`](supabase/migrations/0005_game_dedupe.sql)
+6. [`supabase/migrations/0006_theme_signal_sources.sql`](supabase/migrations/0006_theme_signal_sources.sql)

@@ -88,7 +88,7 @@ export function TrainingShell() {
     for (const stat of statSummaries) byTheme.set(stat.theme, stat);
 
     const rankedWeak = [...statSummaries]
-      .filter((s) => s.attempts > 0)
+      .filter((s) => s.puzzleAttempts > 0 || s.gameMistakeSignals > 0)
       .sort((a, b) => b.weaknessScore - a.weaknessScore)
       .map((s) => s.theme);
 
@@ -329,11 +329,17 @@ function RecommendationCard({
   onStart: () => void;
 }) {
   const cluster = getCluster(theme);
-  const hasData = stat && stat.attempts > 0;
-  const detail = hasData
-    ? `${Math.round(stat.accuracy * 100)}% accuracy · ${stat.failures} miss${
-        stat.failures === 1 ? "" : "es"
-      }`
+  const hasPuzzleData = stat && stat.puzzleAttempts > 0;
+  const hasGameData = stat && stat.gameMistakeSignals > 0;
+  const hasData = hasPuzzleData || hasGameData;
+  const detail = hasPuzzleData
+    ? `${Math.round(stat.accuracy * 100)}% puzzle accuracy · ${stat.puzzleFailures} miss${
+        stat.puzzleFailures === 1 ? "" : "es"
+      }${hasGameData ? ` · ${stat.gameMistakeSignals} game flag${stat.gameMistakeSignals === 1 ? "" : "s"}` : ""}`
+    : hasGameData
+      ? `${stat.gameMistakeSignals} real-game flag${
+          stat.gameMistakeSignals === 1 ? "" : "s"
+        }`
     : "Starter diagnostic";
 
   return (

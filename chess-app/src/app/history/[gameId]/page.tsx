@@ -1,13 +1,21 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getGame } from "@/lib/supabase/games";
 import { getGameAnalysis } from "@/lib/supabase/game-analysis";
 import { CoachPanel } from "@/components/chess/coach-panel";
 import { ReplayViewer } from "@/components/chess/replay-viewer";
 import { SiteHeader } from "@/components/site/header";
+import { UnauthPanel } from "@/components/site/unauth-panel";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Replay",
+  description:
+    "Step through one of your saved games and run AI Coach for blunder analysis.",
+};
 
 export default async function GameReplayPage({
   params,
@@ -20,7 +28,20 @@ export default async function GameReplayPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect(`/?auth_required=history`);
+    return (
+      <main className="flex flex-1 flex-col">
+        <SiteHeader rightContent={<span>Replay</span>} />
+        <UnauthPanel
+          title="Sign in to replay this game"
+          description="Saved games are scoped to your account. Sign in with a magic link and you'll land right back on this replay."
+          benefits={[
+            "Move-by-move replay with arrow annotations",
+            "AI Coach analyzes blunders with red/green arrows",
+            "Optional Gemini explanation of every mistake",
+          ]}
+        />
+      </main>
+    );
   }
 
   const [game, analysis] = await Promise.all([
@@ -68,6 +89,7 @@ export default async function GameReplayPage({
         <CoachPanel
           pgn={game.pgn}
           gameId={game.id}
+          humanColor={game.human_color}
           initialAnalysis={analysis}
         />
       </section>

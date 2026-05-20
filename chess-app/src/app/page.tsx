@@ -18,6 +18,9 @@ export default function Landing() {
           adapts around the themes you miss, while the BigTech-prep framing
           keeps calculation sharp and purposeful.
         </p>
+        <p className="text-xs uppercase tracking-[0.18em] text-foreground/40">
+          Same audience as LeetCode Premium — sharper at the calculation pieces.
+        </p>
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
           <Link
             href="/coach"
