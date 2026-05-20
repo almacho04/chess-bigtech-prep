@@ -95,9 +95,16 @@ export function AiGameShell() {
     useState<Difficulty["id"]>(DEFAULT_DIFFICULTY);
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  // Engine LIFECYCLE state — set by mount + onNewGame only. NEVER set inside
+  // the auto-trigger effect, because changing it would re-fire the effect
+  // (it's in the deps) which would cancel the in-flight bestMove before it
+  // resolves, leaving the UI stuck on "thinking" forever.
   const [engineState, setEngineState] = useState<
-    "loading" | "ready" | "thinking" | "error"
+    "loading" | "ready" | "error"
   >("loading");
+  // UI-only "AI is thinking" flag. Decoupled from engineState — flipping it
+  // does not trigger the auto-trigger effect (not in its dep array).
+  const [aiThinking, setAiThinking] = useState(false);
   const [pendingPromotion, setPendingPromotion] =
     useState<PendingPromotion | null>(null);
   const [savedGameId, setSavedGameId] = useState<string | null>(null);
@@ -210,21 +217,23 @@ export function AiGameShell() {
     const turnColor = fen.split(" ")[1] as HumanColor;
     if (turnColor === humanColor) return;
 
+    if (aiThinking) return; // already in flight; don't double-launch
+
     let cancelled = false;
-    // Marking "thinking" inside the effect is the synchronization point for
-    // launching async engine work; the follow-up setEngineState("ready")
-    // happens in the IIFE below once bestMove resolves.
+    // Use the UI-only `aiThinking` flag (NOT engineState) — it's not in the
+    // effect's deps, so flipping it can't re-trigger the effect or cancel
+    // the in-flight bestMove via the cleanup function.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEngineState("thinking");
+    setAiThinking(true);
     const fenSnapshot = fen;
     const diff = getDifficulty(difficultyId);
 
     (async () => {
-      let nextState: "ready" | "error" = "ready";
+      let errored = false;
       try {
         const engine = engineRef.current;
         if (!engine) {
-          nextState = "error";
+          errored = true;
           return;
         }
         const uci = await engine.bestMove(fenSnapshot, diff);
@@ -235,47 +244,55 @@ export function AiGameShell() {
           tryMove(chessRef.current, uci.from, uci.to, uci.promotion);
           syncFromChess();
         } else {
-          // null uci = engine timed out or returned no move. Transition to
-          // error so the trigger effect won't immediately loop and try again.
-          nextState = "error";
+          // null uci = engine timed out or returned no move. Surface as an
+          // error so the trigger effect won't immediately loop and retry.
+          errored = true;
         }
       } catch {
-        nextState = "error";
+        errored = true;
       } finally {
-        if (aliveRef.current && !cancelled) setEngineState(nextState);
+        if (aliveRef.current && !cancelled) {
+          setAiThinking(false);
+          if (errored) setEngineState("error");
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-    // Re-run only when it's the engine's turn or difficulty/color changes
+    // Re-run only when it's the engine's turn or difficulty/color changes.
+    // `aiThinking` is intentionally omitted: it's flipped INSIDE the effect,
+    // and including it in deps would cancel the in-flight bestMove via the
+    // cleanup function on the very next render — leaving the UI stuck on
+    // "thinking" forever (the bug this state split is designed to fix).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fen, humanColor, difficultyId, mounted, engineState, status.kind, syncFromChess]);
 
   const applyHumanMove = useCallback(
     (from: string, to: string, promotion?: PromotionPiece) => {
       if (!isHumanTurn) return false;
-      if (engineState === "thinking") return false;
+      if (aiThinking) return false;
       const move = tryMove(chessRef.current, from, to, promotion);
       if (!move) return false;
       setSelectedSquare(null);
       syncFromChess();
       return true;
     },
-    [engineState, isHumanTurn, syncFromChess],
+    [aiThinking, isHumanTurn, syncFromChess],
   );
 
   const attemptHumanMove = useCallback(
     (from: string, to: string): boolean => {
       if (!isHumanTurn) return false;
-      if (engineState === "thinking") return false;
+      if (aiThinking) return false;
       if (isPromotionMove(new Chess(fen), from, to)) {
         setPendingPromotion({ from, to, color: humanColor });
         return false; // snap back; picker appears
       }
       return applyHumanMove(from, to);
     },
-    [applyHumanMove, engineState, fen, humanColor, isHumanTurn],
+    [applyHumanMove, aiThinking, fen, humanColor, isHumanTurn],
   );
 
   const onPromotionPick = useCallback(
@@ -324,7 +341,7 @@ export function AiGameShell() {
   );
 
   const onUndo = useCallback(() => {
-    if (engineState === "thinking") return;
+    if (aiThinking) return;
     // Undo human's last move plus the AI's reply that triggered it (two plies),
     // so it's the human's turn again. If only one ply exists (we played black),
     // a single undo suffices.
@@ -336,7 +353,7 @@ export function AiGameShell() {
     }
     setSelectedSquare(null);
     syncFromChess();
-  }, [engineState, humanColor, syncFromChess]);
+  }, [aiThinking, humanColor, syncFromChess]);
 
   const onFlip = useCallback(() => {
     setHumanColor((c) => (c === "w" ? "b" : "w"));
@@ -358,15 +375,18 @@ export function AiGameShell() {
       setSavedGameId(null);
       clearAiGame();
       syncFromChess();
-      // Tell the engine it's a new game and update skill level
+      // Tell the engine it's a new game and update skill level. Use the
+      // aiThinking flag for the UI gate; engineState stays at "ready" unless
+      // newGame actually fails.
       const engine = engineRef.current;
       if (engine) {
-        setEngineState("thinking");
+        setAiThinking(true);
         try {
           await engine.newGame(getDifficulty(diffId).skillLevel);
-          if (aliveRef.current) setEngineState("ready");
         } catch {
           if (aliveRef.current) setEngineState("error");
+        } finally {
+          if (aliveRef.current) setAiThinking(false);
         }
       }
     },
@@ -393,6 +413,7 @@ export function AiGameShell() {
     !mounted ||
     engineState === "loading" ||
     engineState === "error" ||
+    aiThinking ||
     status.kind !== "ongoing" ||
     !isHumanTurn;
 
@@ -426,17 +447,28 @@ export function AiGameShell() {
       </div>
       <div className="flex flex-col gap-4 md:w-80">
         <StatusBanner status={status} />
-        <EngineIndicator state={engineState} difficulty={difficulty} />
+        <EngineIndicator
+          state={
+            engineState === "error"
+              ? "error"
+              : engineState === "loading"
+                ? "loading"
+                : aiThinking
+                  ? "thinking"
+                  : "ready"
+          }
+          difficulty={difficulty}
+        />
         <DifficultySelect
           value={difficultyId}
           onChange={setDifficultyId}
-          disabled={engineState === "thinking"}
+          disabled={aiThinking}
         />
         <SideAndControls
           humanColor={humanColor}
           onFlip={onFlip}
           onUndo={onUndo}
-          canUndo={moves.length > 0 && engineState !== "thinking"}
+          canUndo={moves.length > 0 && !aiThinking}
           onNewGameAs={(c) => onNewGame(c, difficultyId)}
         />
         <MoveHistory moves={moves} />
