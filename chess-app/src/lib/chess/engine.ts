@@ -105,6 +105,42 @@ export class StockfishEngine {
     return parseBestMove(line);
   }
 
+  /**
+   * Get a centipawn evaluation of a position. Always returned from White's
+   * perspective (positive = white winning). Returns 0 on timeout / parse fail.
+   * Mate-in-N is mapped to ±100000 cp so it sorts correctly without polluting
+   * the centipawn range.
+   */
+  async evaluate(fen: string, depth: number): Promise<number> {
+    await this.init();
+    this.send("stop");
+    this.send(`position fen ${fen}`);
+    this.send(`go depth ${depth}`);
+    let lastScore = 0;
+    let sawScore = false;
+    const line = await this.waitForLine(
+      (l) => {
+        // Capture the most recent score from `info depth N ... score cp X` lines.
+        // Stockfish reports score from the side-to-move's perspective.
+        const cpMatch = l.match(/\bscore cp (-?\d+)/);
+        const mateMatch = l.match(/\bscore mate (-?\d+)/);
+        if (cpMatch) {
+          lastScore = parseInt(cpMatch[1], 10);
+          sawScore = true;
+        } else if (mateMatch) {
+          const n = parseInt(mateMatch[1], 10);
+          lastScore = n > 0 ? 100_000 : -100_000;
+          sawScore = true;
+        }
+        return l.startsWith("bestmove");
+      },
+      { timeoutMs: 30_000 },
+    );
+    if (!line || !sawScore) return 0;
+    const sideToMove = fen.split(" ")[1];
+    return sideToMove === "b" ? -lastScore : lastScore;
+  }
+
   /** Tear down the Worker. Safe to call multiple times. */
   dispose(): void {
     if (this.worker) {
