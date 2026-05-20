@@ -124,6 +124,7 @@ npm install
 #   chess-app/supabase/migrations/0002_puzzle_attempts.sql
 #   chess-app/supabase/migrations/0003_user_theme_stats.sql
 #   chess-app/supabase/migrations/0004_game_analyses.sql
+#   chess-app/supabase/migrations/0005_game_dedupe.sql
 
 npm run dev          # → http://localhost:3000
 npm run build        # production build

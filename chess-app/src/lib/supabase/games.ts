@@ -11,6 +11,7 @@ export type GameRow = {
   mode: GameMode;
   opponent_difficulty: OpponentDifficulty | null;
   human_color: HumanColor | null;
+  game_hash?: string | null;
   pgn: string;
   result: GameResult;
   move_count: number;
@@ -36,20 +37,23 @@ export async function saveGame(
 
   const { data, error } = await supabase
     .from("games")
-    .insert({
-      user_id: userId,
-      mode: input.mode,
-      pgn: input.pgn,
-      result: input.result,
-      move_count: input.move_count,
-      opponent_difficulty: input.opponent_difficulty ?? null,
-      human_color: input.human_color ?? null,
-    })
+    .upsert(
+      {
+        user_id: userId,
+        mode: input.mode,
+        pgn: input.pgn,
+        result: input.result,
+        move_count: input.move_count,
+        opponent_difficulty: input.opponent_difficulty ?? null,
+        human_color: input.human_color ?? null,
+      },
+      { onConflict: "user_id,game_hash" },
+    )
     .select("*")
     .single();
 
   if (error) {
-    console.error("[saveGame] insert failed", error);
+    console.error("[saveGame] upsert failed", error);
     return null;
   }
   return data as GameRow;
@@ -59,6 +63,7 @@ export async function listGames(
   supabase: SupabaseClient,
   userId: string,
   limit = 50,
+  opts: { dedupe?: boolean } = {},
 ): Promise<GameRow[]> {
   const { data, error } = await supabase
     .from("games")
@@ -70,7 +75,8 @@ export async function listGames(
     console.error("[listGames] select failed", error);
     return [];
   }
-  return (data ?? []) as GameRow[];
+  const rows = (data ?? []) as GameRow[];
+  return opts.dedupe === false ? rows : dedupeGames(rows);
 }
 
 export async function getGame(
@@ -86,4 +92,31 @@ export async function getGame(
     return null;
   }
   return data as GameRow;
+}
+
+export function dedupeGames(
+  games: readonly GameRow[],
+  preferredIds: ReadonlySet<string> = new Set(),
+): GameRow[] {
+  const byKey = new Map<string, GameRow>();
+  for (const game of games) {
+    const key =
+      game.game_hash ??
+      [
+        game.mode,
+        game.opponent_difficulty ?? "",
+        game.human_color ?? "",
+        game.result,
+        game.pgn,
+      ].join("|");
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, game);
+      continue;
+    }
+    if (preferredIds.has(game.id) && !preferredIds.has(existing.id)) {
+      byKey.set(key, game);
+    }
+  }
+  return [...byKey.values()];
 }

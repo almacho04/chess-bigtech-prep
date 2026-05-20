@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { listGames, type GameRow } from "@/lib/supabase/games";
+import {
+  dedupeGames,
+  listGames,
+  type GameRow,
+} from "@/lib/supabase/games";
+import { listGameAnalyses } from "@/lib/supabase/game-analysis";
 import { SiteHeader } from "@/components/site/header";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +20,13 @@ export default async function HistoryPage() {
     redirect("/?auth_required=history");
   }
 
-  const games = await listGames(supabase, user.id);
+  const [rawGames, analyses] = await Promise.all([
+    listGames(supabase, user.id, 100, { dedupe: false }),
+    listGameAnalyses(supabase, user.id, 100),
+  ]);
+  const analyzedGameIds = new Set(analyses.map((a) => a.game_id));
+  const games = dedupeGames(rawGames, analyzedGameIds);
+  const hiddenDuplicateCount = Math.max(0, rawGames.length - games.length);
 
   return (
     <main className="flex flex-1 flex-col">
@@ -27,6 +38,13 @@ export default async function HistoryPage() {
             {games.length} saved
           </div>
         </header>
+        {hiddenDuplicateCount > 0 ? (
+          <div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+            Hidden {hiddenDuplicateCount} duplicate saved game
+            {hiddenDuplicateCount === 1 ? "" : "s"}. Run migration 0005 to
+            clean them from Supabase permanently.
+          </div>
+        ) : null}
         {games.length === 0 ? (
           <EmptyState />
         ) : (
@@ -38,7 +56,7 @@ export default async function HistoryPage() {
               >
                 <Link
                   href={`/history/${g.id}`}
-                  className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 hover:bg-foreground/5 md:grid-cols-[1fr_auto_auto_auto]"
+                  className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 hover:bg-foreground/5 md:grid-cols-[1fr_auto_auto_auto_auto]"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium">
@@ -48,6 +66,11 @@ export default async function HistoryPage() {
                       {new Date(g.completed_at).toLocaleString()}
                     </div>
                   </div>
+                  {analyzedGameIds.has(g.id) ? (
+                    <Badge tone="good">Analyzed</Badge>
+                  ) : (
+                    <Badge>Needs review</Badge>
+                  )}
                   <Badge>{g.mode === "ai" ? "vs AI" : "Local"}</Badge>
                   <Badge>{g.move_count} moves</Badge>
                   <ResultBadge result={g.result} />
@@ -86,9 +109,21 @@ function labelFor(g: GameRow): string {
   return "Local 2-player";
 }
 
-function Badge({ children }: { children: React.ReactNode }) {
+function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "good";
+}) {
+  const palette =
+    tone === "good"
+      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      : "border-foreground/10 text-foreground/60";
   return (
-    <span className="hidden whitespace-nowrap rounded-md border border-foreground/10 px-2 py-0.5 text-xs text-foreground/60 md:inline-block">
+    <span
+      className={`hidden whitespace-nowrap rounded-md border px-2 py-0.5 text-xs md:inline-block ${palette}`}
+    >
       {children}
     </span>
   );

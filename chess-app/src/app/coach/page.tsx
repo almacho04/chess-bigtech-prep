@@ -30,7 +30,7 @@ export default async function CoachPage() {
 
   const [themeRows, games, gameAnalyses] = await Promise.all([
     listThemeStats(supabase),
-    listGames(supabase, user.id, 20),
+    listGames(supabase, user.id, 100),
     listGameAnalyses(supabase, user.id, 20),
   ]);
 
@@ -46,7 +46,7 @@ export default async function CoachPage() {
     totalAttempts === 0 ? null : Math.round((totalSuccesses / totalAttempts) * 100);
 
   const weakSpots = [...stats]
-    .filter((s) => s.attempts > 0)
+    .filter((s) => s.attempts > 0 && (s.failures > 0 || s.accuracy < 0.65))
     .sort(
       (a, b) =>
         b.weaknessScore - a.weaknessScore ||
@@ -55,8 +55,15 @@ export default async function CoachPage() {
     )
     .slice(0, 3);
 
+  const weakThemes = new Set(weakSpots.map((s) => s.theme));
   const strongSpots = [...stats]
-    .filter((s) => s.attempts >= 2)
+    .filter(
+      (s) =>
+        s.attempts >= 2 &&
+        s.accuracy >= 0.7 &&
+        s.successes > s.failures &&
+        !weakThemes.has(s.theme),
+    )
     .sort(
       (a, b) =>
         b.accuracy - a.accuracy ||
