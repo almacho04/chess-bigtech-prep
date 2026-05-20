@@ -156,8 +156,14 @@ export function CoachPanel({ pgn }: { pgn: string }) {
   );
 }
 
+type ExplainResponse = {
+  explanation: string;
+  source: "gemini" | "placeholder";
+  reason?: string;
+};
+
 function BlunderRow({ blunder }: { blunder: Blunder }) {
-  const [explanation, setExplanation] = useState<string | null>(null);
+  const [response, setResponse] = useState<ExplainResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchExplanation = useCallback(async () => {
@@ -175,14 +181,22 @@ function BlunderRow({ blunder }: { blunder: Blunder }) {
           bestMoveSan: blunder.bestMoveSan,
         }),
       });
-      const data = (await res.json()) as { explanation?: string };
-      setExplanation(data.explanation ?? "(no explanation)");
+      const data = (await res.json()) as ExplainResponse;
+      setResponse(data);
     } catch {
-      setExplanation("(failed to load explanation)");
+      setResponse({
+        explanation: "(failed to load explanation)",
+        source: "placeholder",
+        reason: "fetch_failed",
+      });
     } finally {
       setLoading(false);
     }
   }, [blunder]);
+
+  const isPlaceholder = response?.source === "placeholder";
+  const canRetry =
+    isPlaceholder && response?.reason && response.reason !== "missing_key";
 
   return (
     <li
@@ -196,12 +210,27 @@ function BlunderRow({ blunder }: { blunder: Blunder }) {
         <span className="text-xs uppercase tracking-wide opacity-80">
           {blunder.severity}
         </span>
-        <span className="ml-auto font-mono text-xs">
-          −{(blunder.evalDropCp / 100).toFixed(1)} pawns
+        <span
+          className="ml-auto font-mono text-xs"
+          title={`Eval dropped by ${(blunder.evalDropCp / 100).toFixed(2)} pawn-equivalents. 1 pawn ≈ 100 centipawns.`}
+        >
+          −{(blunder.evalDropCp / 100).toFixed(1)} ({pawnDescriptor(blunder.evalDropCp)})
         </span>
       </div>
-      {explanation ? (
-        <p className="mt-2 text-sm leading-relaxed">{explanation}</p>
+      {response ? (
+        <>
+          <p className="mt-2 text-sm leading-relaxed">{response.explanation}</p>
+          {canRetry ? (
+            <button
+              type="button"
+              onClick={fetchExplanation}
+              disabled={loading}
+              className="mt-2 text-xs underline decoration-dotted underline-offset-2 hover:opacity-80 disabled:opacity-50"
+            >
+              {loading ? "Retrying…" : "Retry"}
+            </button>
+          ) : null}
+        </>
       ) : (
         <button
           type="button"
@@ -214,6 +243,19 @@ function BlunderRow({ blunder }: { blunder: Blunder }) {
       )}
     </li>
   );
+}
+
+/**
+ * Translate a centipawn drop into a plain-English magnitude — so non-chess
+ * players reading the coach panel know what "1.1 pawns" actually means.
+ */
+function pawnDescriptor(cpDrop: number): string {
+  const p = cpDrop / 100;
+  if (p < 0.75) return "slight slip";
+  if (p < 1.75) return "≈ a pawn";
+  if (p < 3.25) return "≈ a minor piece";
+  if (p < 5.5) return "≈ a rook";
+  return "decisive";
 }
 
 function severityClasses(s: Severity): string {
