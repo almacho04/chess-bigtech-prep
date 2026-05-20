@@ -7,11 +7,14 @@ import {
   isPromotionMove,
   legalTargetsFrom,
 } from "@/lib/chess/game";
-import type { Puzzle } from "@/lib/training/puzzles";
+import type { PromotionPiece, Puzzle } from "@/lib/training/puzzles";
+import { getCluster } from "@/lib/training/clusters";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { recordAttempt } from "@/lib/supabase/puzzle-attempts";
 
 type Feedback = "idle" | "wrong" | "solved";
+
+const OPPONENT_REPLY_DELAY_MS = 350;
 
 export function PuzzleSolver({
   puzzle,
@@ -22,22 +25,31 @@ export function PuzzleSolver({
   onNext?: () => void;
   hasNext?: boolean;
 }) {
+  // `stepStartFen` is the position at which the user is expected to make their
+  // move for the current step. Wrong attempts revert to it (not all the way to
+  // puzzle.fen, so multi-step progress isn't lost).
+  const [stepStartFen, setStepStartFen] = useState<string>(puzzle.fen);
   const [currentFen, setCurrentFen] = useState<string>(puzzle.fen);
+  const [currentStep, setCurrentStep] = useState<number>(0);
   const [feedback, setFeedback] = useState<Feedback>("idle");
   const [attempts, setAttempts] = useState<number>(0);
   const [showHint, setShowHint] = useState<boolean>(false);
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
-  // Only the FIRST outcome of a session counts toward the spaced-repetition
-  // schedule. Subsequent retries are practice but don't change the streak.
   const [recordedOutcome, setRecordedOutcome] = useState<
     "pass" | "fail" | null
   >(null);
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
-  // Reset state when the puzzle changes
+  const isMateIn1 = puzzle.cluster === "mateIn1";
+  const totalUserSteps = Math.max(1, Math.ceil(puzzle.solution.length / 2));
+  const userStepNumber = Math.floor(currentStep / 2) + 1;
+
+  // Reset all transient state when the puzzle changes.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStepStartFen(puzzle.fen);
     setCurrentFen(puzzle.fen);
+    setCurrentStep(0);
     setFeedback("idle");
     setAttempts(0);
     setShowHint(false);
@@ -45,8 +57,7 @@ export function PuzzleSolver({
     setRecordedOutcome(null);
   }, [puzzle]);
 
-  // Record the first outcome of each puzzle attempt into the SR schedule.
-  // Signed-out users no-op silently inside recordAttempt().
+  // Record the FIRST outcome of each puzzle attempt into the SR schedule.
   useEffect(() => {
     if (recordedOutcome) return;
     if (feedback === "wrong") {
@@ -59,43 +70,104 @@ export function PuzzleSolver({
     }
   }, [feedback, puzzle.id, recordedOutcome, supabase]);
 
-  // On a wrong attempt, briefly show the move then revert to the puzzle start.
+  // On a wrong attempt, briefly show the move then revert to the step-start FEN.
   useEffect(() => {
     if (feedback !== "wrong") return;
     const t = setTimeout(() => {
-      setCurrentFen(puzzle.fen);
+      setCurrentFen(stepStartFen);
       setFeedback("idle");
       setSelectedSquare(null);
     }, 1000);
     return () => clearTimeout(t);
-  }, [feedback, puzzle.fen]);
+  }, [feedback, stepStartFen]);
 
   const attemptMove = useCallback(
     (from: string, to: string): boolean => {
-      if (feedback === "solved") return false;
-      const chess = new Chess(currentFen);
-      // For mate-in-1 puzzles, auto-queen on promotion (the right piece is
-      // almost always a queen at this level).
-      const promotion = isPromotionMove(chess, from, to) ? "q" : undefined;
-      let moved;
+      if (feedback === "solved" || feedback === "wrong") return false;
+
+      // We need the chess instance at the position right before the user's move.
+      const chess = new Chess(stepStartFen);
+      const expectedUci: string | undefined = puzzle.solution[currentStep];
+
+      // Detect promotion piece. For Lichess puzzles, the solution carries the
+      // exact promotion letter; for mateIn1 hand puzzles, default to queen.
+      let promotion: PromotionPiece | undefined;
+      if (expectedUci && expectedUci.length >= 5) {
+        promotion = expectedUci[4] as PromotionPiece;
+      } else if (isPromotionMove(chess, from, to)) {
+        promotion = "q";
+      }
+
+      let userMove;
       try {
-        moved = chess.move({ from, to, promotion });
+        userMove = chess.move({ from, to, promotion });
       } catch {
         return false;
       }
-      if (!moved) return false;
+      if (!userMove) return false;
 
-      setCurrentFen(chess.fen());
-      if (chess.isCheckmate()) {
-        setFeedback("solved");
-        setSelectedSquare(null);
-      } else {
+      const userUci = `${from}${to}${promotion ?? ""}`;
+      const correct = isMateIn1
+        ? chess.isCheckmate()
+        : expectedUci !== undefined && userUci === expectedUci;
+
+      if (!correct) {
+        setCurrentFen(chess.fen());
         setFeedback("wrong");
         setAttempts((a) => a + 1);
+        return true;
       }
+
+      setCurrentFen(chess.fen());
+      setSelectedSquare(null);
+
+      // Is there an opponent reply?
+      const opponentStep = currentStep + 1;
+      const opponentUci = puzzle.solution[opponentStep];
+      if (!opponentUci) {
+        // No more moves — puzzle solved.
+        setFeedback("solved");
+        return true;
+      }
+
+      // Apply opponent's reply after a short pause so the user can see their move.
+      setTimeout(() => {
+        const after = new Chess(chess.fen());
+        try {
+          after.move({
+            from: opponentUci.slice(0, 2),
+            to: opponentUci.slice(2, 4),
+            promotion:
+              opponentUci.length >= 5
+                ? (opponentUci[4] as PromotionPiece)
+                : undefined,
+          });
+        } catch {
+          // Data-quality fallback: if the opponent reply doesn't apply, declare
+          // the puzzle solved rather than wedge the UI.
+          setFeedback("solved");
+          return;
+        }
+        const fenAfterOpponent = after.fen();
+        setCurrentFen(fenAfterOpponent);
+        setStepStartFen(fenAfterOpponent);
+        const nextUserStep = opponentStep + 1;
+        if (nextUserStep >= puzzle.solution.length) {
+          setFeedback("solved");
+        } else {
+          setCurrentStep(nextUserStep);
+        }
+      }, OPPONENT_REPLY_DELAY_MS);
+
       return true;
     },
-    [currentFen, feedback],
+    [
+      currentStep,
+      feedback,
+      isMateIn1,
+      puzzle.solution,
+      stepStartFen,
+    ],
   );
 
   const onPieceDrop = useCallback(
@@ -114,7 +186,7 @@ export function PuzzleSolver({
 
   const onSquareClick = useCallback(
     (square: string) => {
-      if (feedback === "solved") return;
+      if (feedback === "solved" || feedback === "wrong") return;
       if (selectedSquare && selectedSquare !== square) {
         const ok = attemptMove(selectedSquare, square);
         if (ok) return;
@@ -126,7 +198,9 @@ export function PuzzleSolver({
   );
 
   const tryAgain = useCallback(() => {
+    setStepStartFen(puzzle.fen);
     setCurrentFen(puzzle.fen);
+    setCurrentStep(0);
     setFeedback("idle");
     setSelectedSquare(null);
   }, [puzzle.fen]);
@@ -146,6 +220,8 @@ export function PuzzleSolver({
     return out;
   }, [selectedSquare, currentFen, feedback]);
 
+  const cluster = getCluster(puzzle.cluster);
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 md:flex-row md:p-6">
       <div className="md:flex-1">
@@ -155,13 +231,21 @@ export function PuzzleSolver({
           onPieceDrop={onPieceDrop}
           onSquareClick={onSquareClick}
           highlightedSquares={highlightedSquares}
-          disabled={feedback === "solved"}
+          disabled={feedback !== "idle"}
         />
       </div>
       <div className="flex flex-col gap-4 md:w-80">
         <div className="rounded-md border border-foreground/15 bg-foreground/5 p-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-foreground/50">
-            {puzzle.pack} · {puzzle.difficulty}
+          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-foreground/50">
+            <span>
+              {cluster.label} · {puzzle.difficulty}
+              {puzzle.rating ? ` · ${puzzle.rating}` : ""}
+            </span>
+            {totalUserSteps > 1 ? (
+              <span className="font-mono normal-case text-foreground/60">
+                Step {userStepNumber}/{totalUserSteps}
+              </span>
+            ) : null}
           </div>
           <h2 className="mt-1 text-base font-semibold">{puzzle.title}</h2>
           <p className="mt-1 text-sm text-foreground/70">{puzzle.prompt}</p>
@@ -170,6 +254,7 @@ export function PuzzleSolver({
         <FeedbackBanner
           feedback={feedback}
           attempts={attempts}
+          isMulti={totalUserSteps > 1}
         />
 
         {showHint && puzzle.hint ? (
@@ -179,7 +264,10 @@ export function PuzzleSolver({
         ) : null}
 
         <div className="grid grid-cols-2 gap-2">
-          <SmallButton onClick={tryAgain} disabled={feedback === "idle"}>
+          <SmallButton
+            onClick={tryAgain}
+            disabled={feedback === "idle" && currentStep === 0}
+          >
             Reset
           </SmallButton>
           <SmallButton
@@ -207,9 +295,11 @@ export function PuzzleSolver({
 function FeedbackBanner({
   feedback,
   attempts,
+  isMulti,
 }: {
   feedback: Feedback;
   attempts: number;
+  isMulti: boolean;
 }) {
   if (feedback === "solved") {
     return (
@@ -218,7 +308,7 @@ function FeedbackBanner({
         aria-live="polite"
         className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-900 dark:text-emerald-100"
       >
-        ✓ Checkmate. Nicely done.
+        ✓ {isMulti ? "Sequence solved. Nicely done." : "Checkmate. Nicely done."}
       </div>
     );
   }
@@ -229,14 +319,16 @@ function FeedbackBanner({
         aria-live="polite"
         className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-900 dark:text-red-100"
       >
-        Not quite — that doesn&rsquo;t produce mate.
+        Not quite — try again.
       </div>
     );
   }
   if (attempts === 0) {
     return (
       <div className="rounded-md border border-foreground/15 bg-foreground/5 px-3 py-2 text-sm text-foreground/70">
-        Find the move that mates immediately.
+        {isMulti
+          ? "Find the forcing sequence. Make your move."
+          : "Find the move that mates immediately."}
       </div>
     );
   }

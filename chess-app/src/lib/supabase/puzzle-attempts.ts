@@ -61,6 +61,34 @@ export async function recordAttempt(
 }
 
 /**
+ * Return the user's distinct `last_attempted_at` timestamps over the last
+ * `daysBack` days. Used to compute the daily training streak — caller maps
+ * timestamps to local-YYYY-MM-DD buckets.
+ */
+export async function getAttemptDates(
+  supabase: SupabaseClient,
+  daysBack = 60,
+): Promise<Date[]> {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) return [];
+
+  const since = new Date(Date.now() - daysBack * 86_400_000).toISOString();
+  const { data, error } = await supabase
+    .from("puzzle_attempts")
+    .select("last_attempted_at")
+    .eq("user_id", userId)
+    .gte("last_attempted_at", since)
+    .order("last_attempted_at", { ascending: false });
+
+  if (error) {
+    console.error("[getAttemptDates] select failed", error);
+    return [];
+  }
+  return (data ?? []).map((r) => new Date(r.last_attempted_at as string));
+}
+
+/**
  * List puzzle_ids whose next_review_at has passed. Returns at most `limit`
  * rows ordered by oldest-due first.
  */
